@@ -27,6 +27,15 @@ button{font:inherit;color:inherit}
 h1,h2,h3,p{margin:0}
 .tnum{font-variant-numeric:tabular-nums}
 
+/* The `hidden` attribute and a class's own `display` rule have equal CSS
+   specificity, so a class that sets `display` (flex/grid/block/...) silently
+   wins the tie and the element stays visible despite `hidden` - hit 3 times
+   now (.kiosk-wrap, .offline, .field) as separate "why won't this hide"
+   bugs before switching to this single, standard fix: this is the one
+   sanctioned use of !important for exactly this situation (see MDN on the
+   hidden attribute), not a general pattern to reach for elsewhere. */
+[hidden]{display:none!important}
+
 /* ---------- chrome ---------- */
 .chrome{
   position:sticky; top:0; z-index:40; background:var(--surface);
@@ -56,7 +65,6 @@ h1,h2,h3,p{margin:0}
 .sim input{width:18px;height:18px;accent-color:var(--signal)}
 
 main{max-width:1400px;margin:0 auto;padding:20px 16px 64px}
-.screen[hidden]{display:none}
 .cap{font-size:12.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 .note{
   background:#fff;border:1px solid var(--line);border-left:3px solid var(--serving);
@@ -66,7 +74,6 @@ main{max-width:1400px;margin:0 auto;padding:20px 16px 64px}
 
 /* ---------- 1. kiosk ---------- */
 .kiosk-wrap{display:flex;justify-content:center}
-.kiosk-wrap[hidden]{display:none} /* .kiosk-wrap's own display:flex otherwise beats the UA [hidden] rule at equal specificity */
 .kiosk{
   width:100%;max-width:560px;background:var(--surface);border:1px solid var(--line);
   border-radius:var(--r-xl);box-shadow:var(--shadow-elevated);overflow:hidden
@@ -199,7 +206,6 @@ main{max-width:1400px;margin:0 auto;padding:20px 16px 64px}
 .total b{font-size:26px;letter-spacing:-.02em}
 .offline{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--waiting);
   background:var(--waiting-soft);padding:10px 14px;border-radius:10px}
-.offline[hidden]{display:none} /* same fix as .kiosk-wrap[hidden] - its own display:flex otherwise beats [hidden] */
 
 /* dashboard */
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}

@@ -245,6 +245,65 @@ with whoever owns the actual payment rails, not with this app. The
 mitigation (accountability after the fact), not prevention. Worth stating
 plainly in the diploma report if asked "how do you know a sale is real."
 
+**Partial narrowing of that gap, added 2026-11-27: mobile money sales now
+require the payer's transaction reference.** Still record-only - this
+system never calls MTN/Airtel's API to verify the reference is real or
+that the amount matches - but it closes the specific hole of **reference
+reuse**: `sales.payment_reference` is `UNIQUE` (nullable, so Cash rows with
+no reference never collide with each other), enforced at the database
+level, not just checked in application code. `TokenController::complete`:
+- Requires a reference matching `/^[A-Za-z0-9._\-]{4,50}$/` for `MTN MoMo`/
+  `Airtel Money`, rejects one entirely for `Cash` (nothing for it to refer
+  to - keeps the data model unambiguous).
+- Pre-checks uniqueness for a friendly 409 in the common case
+  (`SaleRepository::referenceExists`), but the **real** enforcement is the
+  database constraint: a race between two requests using the same
+  reference is caught via `DuplicateReferenceException` wrapping SQLSTATE
+  23000 from the `INSERT` itself, not just the pre-check. When that race
+  happens, the token is still marked completed (the service was genuinely
+  rendered) but no sale row is recorded, and the response says so
+  explicitly rather than silently discarding the reference conflict.
+
+This still cannot verify a reference is genuine or that money actually
+moved - only that the same claimed reference wasn't already used
+elsewhere in this system. Real verification needs the provider API access
+described above; this is the improvement buildable without it.
+
+**Two real bugs found while verifying this feature** (worth the method, not
+just the fixes - both were caught by actually running the flow, not by
+reading the code):
+- The reference regex above originally didn't allow dots, rejecting the
+  exact realistic-looking reference (`MP240611.1234.A56789`) used as its
+  own placeholder text and test data. A reminder that validation patterns
+  need testing against realistic real-world input, not just the cases
+  that are convenient to type.
+- `public/js/state/api.js`'s `request()` let a `JSON.parse` failure *after*
+  a real HTTP response escape as a plain `Error` with no `.status`
+  property - which `state/offline.js`'s `isNetworkError()` (status-less =
+  "offline") would have misread as the server being unreachable, when
+  really a response had arrived and just failed to parse. Fixed by giving
+  that error path a `.status` too, so only an actual `fetch()`-level
+  failure (genuine unreachability) is ever classified as offline. Caught
+  while chasing what first looked like a false offline detection; turned
+  out to be a *different*, simpler bug (next point) - but this was a real
+  gap in its own right regardless of what actually triggered the original
+  symptom, so it stayed fixed.
+- **The actual cause of that symptom**: `.offline{display:flex}` in
+  `public/css/styles.css` beat the `[hidden]` attribute at equal
+  specificity - the identical class of bug as the earlier
+  `.kiosk-wrap[hidden]` fix, just on a different element this time. The
+  "network down" banner never actually hid when online, regardless of
+  what `isOffline()` returned. Confirmed, not guessed: instrumented
+  Playwright to log every failed request and HTTP error directly rather
+  than trust the JS logic's own account of itself, saw there was no
+  network failure at all, and re-read the rendered text (which correctly
+  said "0 sales synced... finishing up") to realize the visibility bug was
+  separate from the data being displayed. **Standing lesson for this
+  codebase**: any `class="X"` element that gets toggled via the `hidden`
+  property needs `.X[hidden]{display:none}` in CSS if `.X` itself sets
+  `display` to anything - check this first before suspecting the JS
+  whenever a `hidden` element won't hide.
+
 ## Offline mode: what is and isn't trusted while disconnected
 
 Added alongside the sales endpoint. The design is **asymmetric by
