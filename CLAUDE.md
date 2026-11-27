@@ -134,17 +134,49 @@ scaffold (frontend moved into public/, composer/router/schema/health-check).
    zero console errors — same result as the earlier pure-frontend test, so
    moving everything into `public/` didn't break anything.
 
+8. **Added session-based auth**: `src/Auth/Session.php` (secure/httponly/
+   samesite cookies, regenerate-id on login), `Csrf.php` + `Guard.php`
+   (`requireLogin`/`requireRole`/`requireCsrf`, called explicitly at the top
+   of a protected controller method — no hidden middleware chain),
+   `UserRepository` + `AuthService` (`password_verify`, no custom hashing),
+   `AuthController` wired to `POST /auth/login`, `POST /auth/logout`
+   (CSRF-protected), `GET /auth/me`. `database/seed_users.php` creates the
+   first clerk/supervisor test accounts (no admin UI yet). Verified against
+   real XAMPP MySQL: wrong password → 401, correct login → 200 + user +
+   csrfToken, `/auth/me` reflects the session, logout without CSRF → 403,
+   with CSRF → 200, `/auth/me` → 401 after.
+
+### Debugging note worth keeping: "it just hangs" on a parameterized query
+
+While testing login, every query against `users` with a bound parameter
+hung indefinitely (`SELECT ... WHERE email = :email`), while unparameterized
+queries (`SELECT 1`) worked fine. This looked exactly like a known
+XAMPP/Windows PDO-MySQL native-prepared-statement bug, and `EMULATE_PREPARES
+=> true` was tried as a fix — **but that was a red herring.** The real cause,
+confirmed via `SHOW PROCESSLIST` / `information_schema.innodb_trx`: a
+transaction from the very first hung request that session had been sitting
+open the whole time, holding a lock on `users`, so every subsequent query
+was queuing behind it in "Opening tables" state — regardless of what PDO
+setting was tried. `KILL <id>` on the connections didn't clear it (the
+thread was wedged at the engine level); only a full MySQL restart
+(XAMPP Control Panel → Stop, then Start) did.
+
+**If a query against a specific table seems to hang for no code reason:**
+check `SHOW PROCESSLIST` and `SELECT * FROM information_schema.innodb_trx`
+first, before suspecting PDO settings, PHP code, or the built-in dev
+server. A long-running "Opening tables"/"Statistics" state across several
+connections, plus one old `RUNNING` transaction, means restart MySQL rather
+than debugging the query.
+
 ## Next steps (where to resume)
 
-1. Users table + login/logout/session (native PHP sessions, not JWT) + an
-   RBAC guard function for protected endpoints.
-2. Port the queueing math (`public/js/domain/queueing.js`) to a PHP service
+1. Port the queueing math (`public/js/domain/queueing.js`) to a PHP service
    class; build token endpoints (take a number, call next, complete,
-   no-show) and counter open/close endpoints.
-3. Point `public/js/state/store.js` at the real API instead of in-memory
+   no-show) and counter open/close endpoints, gated with `Guard::requireRole`.
+2. Point `public/js/state/store.js` at the real API instead of in-memory
    state — that should be the one frontend file this touches, by design.
-4. Audit log writes, security headers, rate limiting on login.
-5. Azure resources (App Service + Database for MySQL) + GitHub Actions CI/CD.
+3. Audit log writes, security headers, rate limiting on login.
+4. Azure resources (App Service + Database for MySQL) + GitHub Actions CI/CD.
 
 ## Running the frontend locally
 
