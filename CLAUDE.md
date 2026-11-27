@@ -7,6 +7,12 @@ sophisticated thing possible, and favor approaches the user can learn from
 (plain code over heavy framework magic) unless that tradeoff is called out
 and accepted.
 
+**Security-specific documentation lives in `claudeSecure.md`** (threat model,
+every control implemented and why, how each was verified, and known gaps) -
+keep that file updated alongside this one whenever auth/CSRF/RBAC/rate
+limiting/audit logging/headers change, rather than duplicating the detail
+here.
+
 ## Stack decisions (and why)
 
 - **Frontend:** vanilla HTML/CSS/JS, no framework. A React + Tailwind rewrite
