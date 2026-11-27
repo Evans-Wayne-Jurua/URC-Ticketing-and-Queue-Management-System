@@ -226,15 +226,37 @@ hang (confirmed - they're idle, not holding locks) but unusual for a local
 XAMPP install; worth the user knowing in case it's leftover config from
 something else, not something this project set up.
 
+9. **Wired the frontend to the real API.** `js/state/store.js` is no longer
+   an in-memory "database" - it's a small cache (`auth`/`services`/
+   `counters`/`board`/`queue`/`dashboard`) refreshed by polling the API
+   every 2s via the new `js/state/api.js` fetch wrapper (credentials + CSRF
+   header on writes). `js/domain/queueing.js` is deleted - that math now
+   lives only in `src/Services/QueueingService.php`; the dashboard renders
+   server-computed numbers directly. Clerk and Supervisor screens are now
+   gated behind real login forms (`#clerkLogin`/`#dashLogin` in
+   `public/index.html`); Kiosk and Platform display stay public. Added
+   URL-hash deep-linking (`#kiosk`/`#board`/`#clerk`/`#dash`) so a
+   presentation can point separate devices/windows at one screen each.
+   "Reset demo" was removed (no backend endpoint for it); "Simulate
+   arrivals" now drives the real API instead of faking local data.
+
+   Verified end-to-end with Playwright against the real backend: the full
+   kiosk → board → clerk-login → call-next/complete → supervisor-login →
+   dashboard → counter open/close → deep-link-reload flow. Caught a real
+   CSS bug this way (not a JS bug): `.kiosk-wrap{display:flex}` was beating
+   the `[hidden]` attribute at equal specificity, so both login forms
+   stayed visible after a successful login. Fixed with a targeted
+   `.kiosk-wrap[hidden]{display:none}` rule in `public/css/styles.css`. If
+   a `hidden` element ever "doesn't hide" again, suspect exactly this -
+   check whether its class sets `display` anywhere before assuming a JS bug.
+
 ## Next steps (where to resume)
 
-1. Point `public/js/state/store.js` at the real API instead of in-memory
-   state — that should be the one frontend file this touches, by design.
-   The full REST surface now exists (see below) with the same domain shape
-   the frontend already uses.
-2. Audit log writes (table exists, nothing writes to it yet), security
+1. Audit log writes (table exists, nothing writes to it yet), security
    headers, rate limiting on login.
-3. Azure resources (App Service + Database for MySQL) + GitHub Actions CI/CD.
+2. Azure resources (App Service + Database for MySQL) + GitHub Actions CI/CD.
+3. Offline support for the kiosk/clerk screens is still just a UI banner,
+   not implemented - see "Why move state to the API" above.
 
 ### Current API surface (`src/routes.php`)
 
