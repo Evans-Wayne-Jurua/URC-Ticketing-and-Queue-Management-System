@@ -1,0 +1,10 @@
+# Applies to the whole public/ web root (Apache - XAMPP locally, Azure App
+# Service in production). The PHP built-in dev server (`php -S`) ignores
+# this file entirely; public/api/index.php sets the same headers in PHP so
+# API responses are covered either way.
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "DENY"
+  Header always set Referrer-Policy "no-referrer"
+  Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+</IfModule>

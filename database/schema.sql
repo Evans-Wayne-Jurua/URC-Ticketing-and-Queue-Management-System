@@ -73,6 +73,16 @@ CREATE TABLE IF NOT EXISTS audit_log (
     FOREIGN KEY (token_id) REFERENCES tokens(id)
 ) ENGINE=InnoDB;
 
+-- Failed-login throttling (see src/Auth/RateLimiter.php). Keyed on the
+-- submitted email rather than IP - simpler and still effective, and not
+-- dependent on trusting a proxy header for the real client IP.
+CREATE TABLE IF NOT EXISTS login_attempts (
+    id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    identifier VARCHAR(190) NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_login_attempts_identifier_time (identifier, created_at)
+) ENGINE=InnoDB;
+
 -- Reference data matching the frontend's current defaults (js/state/store.js)
 INSERT IGNORE INTO services (code, prefix, label_en, label_lg) VALUES
     ('ticket',  'A', 'Buy a ticket', 'Gula tikiti'),
