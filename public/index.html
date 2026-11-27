@@ -30,7 +30,6 @@
     </div>
     <div class="chrome-right">
       <label class="sim"><input type="checkbox" id="autoArr"> Simulate arrivals</label>
-      <button class="ghost" id="reset">Reset demo</button>
     </div>
   </div>
 </header>
@@ -117,7 +116,28 @@
 
 <!-- ===================== 3 CLERK ===================== -->
 <section class="screen" id="screen-clerk" hidden aria-label="Clerk counter screen">
-  <p class="note"><b>Try it:</b> press <b>Call next</b> to take the longest-waiting number. That stamps T2. <b>Complete sale</b> stamps T3. Those three stamps are the only data the mathematics needs — the clerk never does extra work to collect it.</p>
+  <div class="kiosk-wrap" id="clerkLogin" hidden>
+    <div class="kiosk" style="max-width:420px">
+      <div class="kiosk-head">
+        <h2 style="font-size:26px">Clerk sign in</h2>
+        <p>Staff only — ask a supervisor for an account</p>
+      </div>
+      <div class="kiosk-body">
+        <form id="clerkLoginForm">
+          <label class="field"><span>Email</span><input type="email" name="email" required autocomplete="username"></label>
+          <label class="field"><span>Password</span><input type="password" name="password" required autocomplete="current-password"></label>
+          <p class="meta" data-error style="color:var(--waiting);min-height:18px"></p>
+          <button type="submit" class="btn btn-pri" style="width:100%">Sign in</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div id="clerkApp" hidden>
+  <div class="note" style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+    <span><b>Try it:</b> press <b>Call next</b> to take the longest-waiting number. That stamps T2. <b>Complete sale</b> stamps T3.</span>
+    <span style="white-space:nowrap">Signed in as <b id="clerkWhoAmI"></b> · <button class="ghost" data-logout>Log out</button></span>
+  </div>
   <div class="cols">
     <div class="col-main">
       <div class="card">
@@ -183,11 +203,33 @@
       </div></div>
     </div>
   </div>
+  </div>
 </section>
 
 <!-- ===================== 4 DASHBOARD ===================== -->
 <section class="screen" id="screen-dash" hidden aria-label="Supervisor dashboard">
-  <p class="note"><b>This is where the project earns its marks.</b> Every figure below is computed live from the timestamps the other three screens produce — nothing here is typed in by hand.</p>
+  <div class="kiosk-wrap" id="dashLogin" hidden>
+    <div class="kiosk" style="max-width:420px">
+      <div class="kiosk-head">
+        <h2 style="font-size:26px">Supervisor sign in</h2>
+        <p>Supervisor/admin accounts only</p>
+      </div>
+      <div class="kiosk-body">
+        <form id="dashLoginForm">
+          <label class="field"><span>Email</span><input type="email" name="email" required autocomplete="username"></label>
+          <label class="field"><span>Password</span><input type="password" name="password" required autocomplete="current-password"></label>
+          <p class="meta" data-error style="color:var(--waiting);min-height:18px"></p>
+          <button type="submit" class="btn btn-pri" style="width:100%">Sign in</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div id="dashApp" hidden>
+  <div class="note" style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+    <span><b>This is where the project earns its marks.</b> Every figure below is computed live from the timestamps the other screens produce.</span>
+    <span style="white-space:nowrap">Signed in as <b id="dashWhoAmI"></b> · <button class="ghost" data-logout>Log out</button></span>
+  </div>
 
   <div class="kpis" style="margin-bottom:16px">
     <div class="kpi"><p class="k">In queue now</p><p class="v tnum" id="kQ">0</p></div>
@@ -241,6 +283,7 @@
         <p style="font-size:13.5px;color:var(--muted)">λ and μ are re-estimated from this station’s own stamps. Load another operator’s data and the same screens retrain on it — nothing here is hard-coded to URC.</p>
       </div></div>
     </div>
+  </div>
   </div>
 </section>
 

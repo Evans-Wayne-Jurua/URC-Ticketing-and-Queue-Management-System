@@ -1,19 +1,21 @@
 // UI layer: renders the arrivals bar chart (SVG) into #chart.
+// The 12-block shape is a fixed demo profile (see note below) - only the
+// "right now" block is driven by live data, passed in by the caller.
 import { $ } from "./dom.js";
-import { waiting, serving } from "../state/store.js";
 
-export function drawChart(){
+export function drawChart(liveCount) {
   var svg = $("chart"), W=720, H=240, padL=34, padR=8, padT=14, padB=30;
-  // 12 blocks of 15 min leading to the 17:30 departure; last two blocks come from live data
+  // 12 blocks of 15 min leading to the 17:30 departure; the last block is
+  // nudged up to at least the current live queue length.
   var base = [4,5,6,8,9,12,15,19,28,24,14,8];
-  var live = waiting().length + serving().length;
-  base[11] = Math.max(base[11], live);          // the block happening now
+  if (typeof liveCount === "number") {
+    base[11] = Math.max(base[11], liveCount);
+  }
   var labels = ["14:00","","15:00","","16:00","","17:00","","17:30","","18:00",""];
   var max = Math.max.apply(null, base) * 1.12;
   var bw = (W-padL-padR)/base.length, gap = 8;
   var peak = base.indexOf(Math.max.apply(null,base));
   var parts = [];
-  // recessive gridlines
   [0,0.5,1].forEach(function(f){
     var y = padT + (H-padT-padB)*(1-f);
     parts.push('<line x1="'+padL+'" y1="'+y.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+y.toFixed(1)+'" stroke="#e2e6ed" stroke-width="1"/>');

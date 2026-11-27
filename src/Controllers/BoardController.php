@@ -39,6 +39,7 @@ final class BoardController
             'nowServing' => $nowServing,
             'nextCodes' => array_map(static fn(array $t): string => $t['code'], array_slice($waiting, 0, 6)),
             'typicalWaitMinutes' => $typicalWaitMin,
+            'waitingCount' => count($waiting),
         ]);
     }
 }
