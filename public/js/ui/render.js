@@ -153,8 +153,16 @@ function renderDashboard() {
         : (d.inQueue ? "<span class='pill pill-wait'>Idle — queue waiting</span>" : "<span class='pill pill-idle'>Idle</span>");
     var toggle = "<button class='ctrtoggle' data-toggle-counter='" + c.number + "'" + (c.isOpen && c.serving ? " disabled" : "") + ">"
       + (c.isOpen ? "Close" : "Open") + "</button>";
+
+    // reconciliation: how many tickets this counter actually got through
+    // today, visible regardless of its current open/serving state
+    var statParts = [];
+    if (c.servedToday > 0) statParts.push(c.servedToday + " served today");
+    if (c.noShowsToday > 0) statParts.push(c.noShowsToday + " no-show" + (c.noShowsToday === 1 ? "" : "s"));
+    var statSuffix = statParts.length ? " · " + statParts.join(", ") : "";
+
     return "<li><span class='qnum'>" + c.number + "</span><span class='qsvc'>"
-      + (!c.isOpen ? "Not staffed" : (c.serving ? "Serving — " + c.serving : "Free, waiting for next")) + "</span>"
+      + (!c.isOpen ? "Not staffed" : (c.serving ? "Serving — " + c.serving : "Free, waiting for next")) + statSuffix + "</span>"
       + "<span class='ctr-actions'>" + pill + toggle + "</span></li>";
   }).join("");
 

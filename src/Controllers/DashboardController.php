@@ -43,13 +43,17 @@ final class DashboardController
         foreach ($serving as $t) {
             $servingByCounter[(int) $t['counter_number']] = $t;
         }
+        $countsByCounter = $this->tokens->countsByCounterToday();
 
-        $counterStatus = array_map(function (array $c) use ($servingByCounter): array {
+        $counterStatus = array_map(function (array $c) use ($servingByCounter, $countsByCounter): array {
             $t = $servingByCounter[$c['number']] ?? null;
+            $counts = $countsByCounter[$c['number']] ?? ['done' => 0, 'noshow' => 0];
             return [
                 'number' => $c['number'],
                 'isOpen' => $c['is_open'],
                 'serving' => $t['code'] ?? null,
+                'servedToday' => $counts['done'],
+                'noShowsToday' => $counts['noshow'],
             ];
         }, $this->counters->all());
 

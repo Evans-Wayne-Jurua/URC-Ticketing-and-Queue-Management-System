@@ -182,4 +182,33 @@ final class TokenRepository
             ->query("SELECT COUNT(*) FROM tokens WHERE status = 'done' AND DATE(t3) = CURDATE()")
             ->fetchColumn();
     }
+
+    /**
+     * Today's done/no-show counts per counter, for the supervisor's
+     * reconciliation view - "how many tickets did counter N actually get
+     * through today" (see claudeSecure.md on why this is tracking, not
+     * payment verification).
+     *
+     * @return array<int,array{done:int,noshow:int}> keyed by counter_number
+     */
+    public function countsByCounterToday(): array
+    {
+        $rows = Database::connection()->query(
+            "SELECT counter_number, status, COUNT(*) AS cnt
+             FROM tokens
+             WHERE DATE(t3) = CURDATE() AND status IN ('done', 'noshow') AND counter_number IS NOT NULL
+             GROUP BY counter_number, status"
+        )->fetchAll();
+
+        $counts = [];
+        foreach ($rows as $row) {
+            $counter = (int) $row['counter_number'];
+            if (!isset($counts[$counter])) {
+                $counts[$counter] = ['done' => 0, 'noshow' => 0];
+            }
+            $counts[$counter][$row['status']] = (int) $row['cnt'];
+        }
+
+        return $counts;
+    }
 }
