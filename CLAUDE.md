@@ -81,6 +81,39 @@ baseline single-file prototype → layering refactor → counter open/close
 domain fix → layout fix found while testing → CLAUDE.md added → PHP backend
 scaffold (frontend moved into public/, composer/router/schema/health-check).
 
+## Why move state to the API (not just keep it in-memory)
+
+Discussed and decided 2026-11-27, before wiring the frontend to the backend:
+
+- **Security is the real reason, not memory.** With state held in the
+  browser's JS (the original prototype), there is no enforcement boundary -
+  anyone can open devtools and call `mkToken()` directly, edit `state` to
+  fake a "served" count, or bypass the "supervisor-only" counter toggle,
+  because client and server are the same trust domain. The restriction is
+  a UI affordance, not a real one. With the API, the server enforces it:
+  a tampered browser still can't call-next or complete a sale without a
+  session cookie the server validates and a role it checks
+  (`Guard::requireRole`), and every timestamp (`t1`/`t2`/`t3`) is set by
+  the database's `NOW()`, never trusted from the client. That's the core
+  client/server security principle - never trust the client - and it's
+  categorically different from what existed before, not incremental.
+- **Memory efficiency is a wash at this app's scale** (a handful of tokens/
+  counters) - not a real argument either way. Where state location *does*
+  matter: kiosk, platform display, clerk, and supervisor are meant to be
+  separate physical devices, not browser tabs sharing one in-memory object.
+  The in-memory version only "worked" because everything happened to run
+  in one tab. Moving state into the database means all four screens see
+  one real, shared, authoritative state instead of each independently
+  simulating its own, and each client's own memory footprint shrinks too,
+  since it fetches only the slice it needs instead of holding the whole
+  simulated history.
+- **Open design question, not yet solved:** the clerk screen already has an
+  "offline - sales saved locally, will sync" banner baked into its copy,
+  foreshadowing exactly this problem. Wiring to the API does not by itself
+  give offline support - that needs its own design pass (a local queue of
+  pending actions + sync-on-reconnect) if it's wanted later. Don't assume
+  it's handled just because the API exists.
+
 ## Domain model notes worth remembering
 
 - **Kiosk = passenger self-service**, not staff. No login. Modeled on a
