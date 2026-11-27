@@ -2,7 +2,7 @@
 // UI layers, and bootstraps the app. Nothing here holds business logic —
 // it only calls out to state/, domain/ and ui/.
 import { $, fmtMin } from "./ui/dom.js";
-import { seed, mkToken, waiting, serving, state } from "./state/store.js";
+import { seed, mkToken, waiting, serving, state, openCounters, isCounterOpen, openCounter, closeCounter } from "./state/store.js";
 import { muHat } from "./domain/queueing.js";
 import { COPY, lang, setLang } from "./domain/i18n.js";
 import { render, activeCounter, setActiveCounter } from "./ui/render.js";
@@ -29,7 +29,7 @@ document.querySelectorAll(".svc").forEach(function(b){
   b.addEventListener("click", function(){
     var tok = mkToken(b.dataset.svc);
     var ahead = waiting().length - 1;
-    var w = Math.max(1, Math.round(ahead / Math.max(1,state.openCounters) * (3600/muHat()) / 60));
+    var w = Math.max(1, Math.round(ahead / Math.max(1,openCounters().length) * (3600/muHat()) / 60));
     $("issuedNum").textContent = tok.id;
     $("issuedWait").textContent = fmtMin(w);
     $("issuedAhead").textContent = ahead === 0 ? "You are next" : ahead + " ahead of you";
@@ -42,7 +42,7 @@ document.querySelectorAll(".svc").forEach(function(b){
 /* ---------------- 3 clerk ---------------- */
 $("ctrPick").addEventListener("change", function(e){
   setActiveCounter(parseInt(e.target.value,10));
-  $("ctrLabel").textContent = activeCounter; render();
+  render();
 });
 $("btnNext").addEventListener("click", function(){
   var mine = serving().filter(function(t){return t.counter===activeCounter;});
@@ -69,6 +69,15 @@ function saleTotal(){
   $("saleTotal").textContent = "Shs " + p.toLocaleString("en-US");
 }
 ["saleClass","saleQty"].forEach(function(id){ $(id).addEventListener("input", saleTotal); $(id).addEventListener("change", saleTotal); });
+
+/* ---------------- 4 supervisor: open/close counters ---------------- */
+$("ctrStatus").addEventListener("click", function(e){
+  var btn = e.target.closest("[data-toggle-counter]");
+  if(!btn || btn.disabled) return;
+  var c = parseInt(btn.dataset.toggleCounter,10);
+  if(isCounterOpen(c)) closeCounter(c); else openCounter(c);
+  render();
+});
 
 /* ---------------- tabs / controls ---------------- */
 document.querySelectorAll(".tab").forEach(function(t){

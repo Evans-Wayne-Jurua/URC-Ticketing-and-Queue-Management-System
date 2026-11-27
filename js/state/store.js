@@ -17,7 +17,7 @@ let seq;
 function now(){ return Date.now(); }
 
 export function seed(){
-  state = { tokens:[], openCounters:3, servedToday:0, serviceSecs:[], startedAt: now() };
+  state = { tokens:[], counterOpen:{1:true,2:true,3:true,4:false}, servedToday:0, serviceSecs:[], startedAt: now() };
   seq = {A:0,B:0,C:0};
   // a handful of people already in line so the dashboard isn't empty
   var backdate = [15,13,11,8,5,2];
@@ -42,3 +42,15 @@ export function mkToken(svc, at){
 
 export function waiting(){ return state.tokens.filter(function(t){return t.status==="waiting";}); }
 export function serving(){ return state.tokens.filter(function(t){return t.status==="serving";}); }
+
+// "Open" is an administrative decision (a supervisor allocates the counter for
+// use today) — distinct from a clerk actually logging in and serving from it.
+export function isCounterOpen(c){ return !!state.counterOpen[c]; }
+export function openCounters(){ return COUNTERS.filter(function(c){ return state.counterOpen[c]; }); }
+export function openCounter(c){ state.counterOpen[c] = true; }
+export function closeCounter(c){
+  var busy = serving().some(function(t){ return t.counter===c; });
+  if(busy) return false;   // can't close a counter mid-service
+  state.counterOpen[c] = false;
+  return true;
+}
