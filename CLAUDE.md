@@ -31,49 +31,60 @@ here.
   Flexible Server (Burstable tier). Frontend and API are meant to be served
   from the **same App Service** (one origin) so cookie-based sessions work
   without CORS complications.
-- **Auth approach (planned, not yet built):** native PHP sessions (not JWT) —
+- **Auth approach (implemented):** native PHP sessions (not JWT) —
   `password_hash`/`password_verify`, `session_regenerate_id` on login, RBAC
   guard function per protected endpoint, CSRF token header on state-changing
   requests. Kiosk and platform-display screens stay public/no-login — only
-  Clerk and Supervisor need accounts.
-- **Web-root boundary (planned):** once the backend exists, only a `public/`
-  folder should be web-reachable (frontend files + `public/api/index.php`
-  front controller). `composer.json`, `.env`, `src/` must never be served
-  directly — this is the top PHP-on-Azure security gotcha.
+  Clerk and Supervisor need accounts. Full detail + verification in
+  `claudeSecure.md`.
+- **Web-root boundary (implemented):** only `public/` is web-reachable
+  (frontend files + `public/api/index.php` front controller).
+  `composer.json`, `.env`, `src/` sit outside it and are never served
+  directly — the top PHP-on-Azure security gotcha, already handled.
 
 ## Repo structure (current)
 
 ```
 public/                  the ONLY web-reachable folder (Apache/Azure doc root)
-  index.html              markup only
+  index.html              markup (kiosk/board/clerk/dash screens + login forms)
   css/styles.css          all styles
   js/
-    state/store.js         in-memory data layer — the one file that becomes
-                            real API calls once the frontend is wired to the API
-    domain/
-      queueing.js           pure Erlang-C math, no DOM — unit-testable
-      i18n.js                translation content + current language
+    state/
+      api.js                fetch() wrapper - credentials, CSRF header, JSON
+      store.js               local cache (auth/services/counters/board/queue/
+                              dashboard) kept in sync by polling the API
+      offline.js              real-network-failure detection (not navigator.onLine)
+      pendingSales.js          localStorage outbox for offline "Complete sale"
+    domain/i18n.js          translation content + current language
     ui/
       dom.js                 $ / formatting helpers
       chart.js               SVG arrivals chart
-      render.js              updates all four screens from state+domain data
-    main.js                  event wiring, app bootstrap
+      render.js              updates all four screens from the cache
+    main.js                  event wiring, app bootstrap, deep-linking
   api/
     index.php               front controller (dispatches via src/Http/Router)
     .htaccess                routes unmatched requests to index.php (Apache)
+  .htaccess                 security headers for static files (Apache)
   router.php               equivalent routing for `php -S` (local dev only;
                             the built-in server ignores .htaccess)
 src/                      PHP backend, PSR-4 autoloaded as App\
   Support/Env.php          minimal .env loader (local dev only)
   Config/Database.php      PDO factory, reads DB_* env vars
-  Http/Router.php           small method+path-pattern router
-  Controllers/
-    HealthController.php    GET /api/health — proves router→DB pipe works
-  routes.php                route table
-database/schema.sql       services/counters/tokens/sales/users/audit_log +
-                          seed data matching the frontend's current defaults
-composer.json             PSR-4 autoload only, no framework/dependencies yet
+  Http/{Router,Request}.php small router + json-body helper
+  Auth/                    Session, Csrf, Guard, RateLimiter
+  Services/                AuthService, QueueingService (the Erlang-C port)
+  Repositories/            User, Service, Counter, Token, Sale, AuditLog
+  Controllers/             Health, Auth, Service, Board, Queue, Dashboard,
+                           Counter, Token
+  routes.php                full route table (see "Current API surface" below)
+database/
+  schema.sql               services/counters/tokens/sales/users/audit_log/
+                           login_attempts + seed data
+  seed_users.php           CLI-only script to create the first clerk/
+                           supervisor test accounts
+composer.json             PSR-4 autoload only, no framework/dependencies
 .env.example              template; real .env is local-only (gitignored)
+claudeSecure.md           dedicated security documentation (see pointer above)
 ```
 
 Local dev DB: XAMPP's MariaDB, database `urc_ticketing`, applied via
@@ -82,10 +93,10 @@ Local dev DB: XAMPP's MariaDB, database `urc_ticketing`, applied via
 then open `http://127.0.0.1:8000/` — this serves the frontend AND the API
 from one origin, matching the planned Azure setup.
 
-Git: initialized this session, no remote yet. Commits so far (oldest first):
-baseline single-file prototype → layering refactor → counter open/close
-domain fix → layout fix found while testing → CLAUDE.md added → PHP backend
-scaffold (frontend moved into public/, composer/router/schema/health-check).
+Git: pushed to GitHub (public) at
+https://github.com/Evans-Wayne-Jurua/URC-Ticketing-and-Queue-Management-System,
+`master` branch, no CI configured. `.env` was never committed (confirmed
+before the first push); only `.env.example` is tracked.
 
 ## Why move state to the API (not just keep it in-memory)
 
