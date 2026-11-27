@@ -22,11 +22,52 @@ function screenFromHash() {
   return SCREENS.indexOf(h) !== -1 ? h : "kiosk";
 }
 
+// Subtle crossfade between screens - opacity/transform only (GPU-cheap, no
+// layout work), ~160ms each way, skipped entirely for prefers-reduced-motion.
+var SCREEN_TRANSITION_MS = 160;
+var screenTransitioning = false;
+var reducedMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
 function showScreen(name) {
   document.querySelectorAll(".tab").forEach(function (t) {
     t.setAttribute("aria-selected", String(t.dataset.screen === name));
   });
-  SCREENS.forEach(function (s) { $("screen-" + s).hidden = (s !== name); });
+
+  var next = $("screen-" + name);
+  var current = SCREENS.map(function (s) { return $("screen-" + s); })
+    .find(function (el) { return !el.hidden; });
+
+  function snap() {
+    SCREENS.forEach(function (s) { $("screen-" + s).hidden = (s !== name); });
+  }
+
+  if (!current || current === next || reducedMotion) {
+    snap();
+    return;
+  }
+
+  if (screenTransitioning) {
+    current.classList.remove("screen-leave");
+    next.classList.remove("screen-enter");
+    snap();
+    screenTransitioning = false;
+    return;
+  }
+
+  screenTransitioning = true;
+  current.classList.add("screen-leave");
+  setTimeout(function () {
+    current.hidden = true;
+    current.classList.remove("screen-leave");
+    next.hidden = false;
+    next.classList.add("screen-enter");
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        next.classList.remove("screen-enter");
+        screenTransitioning = false;
+      });
+    });
+  }, SCREEN_TRANSITION_MS);
 }
 
 document.querySelectorAll(".tab").forEach(function (t) {

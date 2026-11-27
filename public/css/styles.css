@@ -57,6 +57,12 @@ h1,h2,h3,p{margin:0}
 
 main{max-width:1400px;margin:0 auto;padding:20px 16px 64px}
 .screen[hidden]{display:none}
+.screen{opacity:1;transform:translateY(0);transition:opacity .16s ease-out,transform .16s ease-out}
+.screen.screen-leave{opacity:0;transform:translateY(-6px)}
+.screen.screen-enter{opacity:0;transform:translateY(6px)}
+@media (prefers-reduced-motion: reduce){
+  .screen{transition:none}
+}
 .cap{font-size:12.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 .note{
   background:#fff;border:1px solid var(--line);border-left:3px solid var(--serving);
