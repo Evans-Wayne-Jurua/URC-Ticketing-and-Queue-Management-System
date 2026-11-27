@@ -102,7 +102,8 @@ export function render(){
     var toggle = "<button class='ctrtoggle' data-toggle-counter='"+c+"'"+(isOpen&&t?" disabled":"")+">"
       + (isOpen ? "Close" : "Open") + "</button>";
     return "<li><span class='qnum'>"+c+"</span><span class='qsvc'>"
-      + (!isOpen?"Not staffed":(t?"Serving — "+mins(Date.now()-t.t2)+" min":"Free, waiting for next"))+"</span>"+pill+toggle+"</li>";
+      + (!isOpen?"Not staffed":(t?"Serving — "+mins(Date.now()-t.t2)+" min":"Free, waiting for next"))
+      + "</span><span class='ctr-actions'>"+pill+toggle+"</span></li>";
   }).join("");
 
   drawChart();

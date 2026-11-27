@@ -176,10 +176,15 @@ main{max-width:1400px;margin:0 auto;padding:20px 16px 64px}
 .pill-serve{background:var(--serving-soft);color:#14459f}
 .pill-done{background:var(--done-soft);color:var(--done)}
 .pill-idle{background:#fff;color:var(--muted);box-shadow:inset 0 0 0 1px var(--line)}
-.ctrtoggle{margin-left:8px;border:1px solid var(--line);background:#fff;border-radius:999px;
+.ctrtoggle{border:1px solid var(--line);background:#fff;border-radius:999px;
   padding:5px 12px;font-size:12.5px;font-weight:700;cursor:pointer;flex:none;transition:border-color .15s,background .15s}
 .ctrtoggle:hover{border-color:var(--navy);background:#f7f9fc}
 .ctrtoggle:disabled{opacity:.45;cursor:not-allowed}
+/* counter-status rows are narrow (sidebar card) and now carry a pill + a
+   button, so give the status text its own line and right-align the rest */
+#ctrStatus li{flex-wrap:wrap;row-gap:8px}
+#ctrStatus .qsvc{flex:1 1 140px}
+#ctrStatus .ctr-actions{flex:1 1 100%;display:flex;justify-content:flex-end;align-items:center;gap:8px}
 .empty-state{padding:28px 18px;text-align:center;color:var(--muted);font-size:14.5px}
 .field{display:block;margin-bottom:12px}
 .field span{display:block;font-size:13px;font-weight:600;color:var(--muted);margin-bottom:5px}
