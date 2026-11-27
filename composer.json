@@ -1,0 +1,19 @@
+{
+    "name": "urc/ticketing-queue",
+    "description": "URC Ticketing and Queue Management System - backend API",
+    "type": "project",
+    "license": "proprietary",
+    "require": {
+        "php": ">=8.1",
+        "ext-pdo": "*",
+        "ext-pdo_mysql": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/"
+        }
+    },
+    "scripts": {
+        "serve": "php -S 127.0.0.1:8000 -t public public/router.php"
+    }
+}

@@ -1,6 +1,9 @@
 .idea/
 node_modules/
+vendor/
+composer.phar
 .env
 .env.*
+!.env.example
 dist/
 *.log
