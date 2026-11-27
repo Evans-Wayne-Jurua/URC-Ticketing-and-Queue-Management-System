@@ -3,6 +3,7 @@
 // numbers any more - the server does that (src/Services/QueueingService.php)
 // and this just holds whatever it last returned.
 import { api, setCsrfToken } from './api.js';
+import { isNetworkError } from './offline.js';
 
 export const cache = {
   auth: null, // { id, email, role } | null
@@ -30,6 +31,24 @@ export function openCounterNumbers() {
   return cache.counters.filter((c) => c.is_open).map((c) => c.number);
 }
 
+// Optimistic client-side override for "Complete sale" done while offline
+// (see state/pendingSales.js) - the server doesn't know yet, but the clerk
+// already finished with this passenger, so the UI shouldn't keep showing
+// them as being served until the queued action syncs.
+const locallyCompletedCounters = new Set();
+
+export function markLocallyCompleted(counter) {
+  locallyCompletedCounters.add(counter);
+}
+
+export function clearLocallyCompleted(counter) {
+  locallyCompletedCounters.delete(counter);
+}
+
+export function isLocallyCompleted(counter) {
+  return locallyCompletedCounters.has(counter);
+}
+
 export async function refreshAuth() {
   try {
     const data = await api.me();
@@ -55,7 +74,7 @@ export async function refreshQueue() {
   try {
     cache.queue = await api.queue();
   } catch (e) {
-    cache.queue = null;
+    if (!isNetworkError(e)) cache.queue = null; // keep last-known data through a network blip
   }
 }
 
@@ -67,7 +86,7 @@ export async function refreshDashboard() {
   try {
     cache.dashboard = await api.dashboard();
   } catch (e) {
-    cache.dashboard = null;
+    if (!isNetworkError(e)) cache.dashboard = null;
   }
 }
 

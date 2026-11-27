@@ -16,6 +16,15 @@ final class ServiceRepository
         return $row === false ? null : $row;
     }
 
+    public function find(int $id): ?array
+    {
+        $stmt = Database::connection()->prepare('SELECT * FROM services WHERE id = :id LIMIT 1');
+        $stmt->execute(['id' => $id]);
+        $row = $stmt->fetch();
+
+        return $row === false ? null : $row;
+    }
+
     /** @return array<int,array<string,mixed>> */
     public function all(): array
     {

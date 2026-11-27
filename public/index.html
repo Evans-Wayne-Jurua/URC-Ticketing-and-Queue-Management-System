@@ -46,6 +46,7 @@
           <h2 id="kioskTitle">Welcome to Kampala Station</h2>
           <p id="kioskSub">Choose what you need and take a number</p>
         </div>
+        <p class="note" id="kioskRetryMsg" hidden style="margin:16px 24px 0">Can't reach the ticketing system right now — we'll keep trying automatically. If this continues, please ask a member of staff.</p>
         <div class="kiosk-body">
           <button class="svc" data-svc="ticket">
             <span class="ico" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 9V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 6v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-6z"/><path d="M10 5v14" stroke-dasharray="2 3"/></svg></span>
@@ -195,11 +196,11 @@
         </div>
       </div>
       <div class="card"><div class="card-b">
-        <div class="offline">
+        <div class="offline" id="clerkOffline" hidden>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 3l18 18M8.5 16.4a5 5 0 0 1 7 0M5 12.9a10 10 0 0 1 4-2.6M19 12.9a10 10 0 0 0-7-2.9"/><circle cx="12" cy="20" r="1" fill="currentColor" stroke="none"/></svg>
-          Network down — sales saved on this machine, will sync
+          <span data-offline-text>Network down — sales saved on this machine, will sync</span>
         </div>
-        <p style="font-size:13px;color:var(--muted);margin-top:10px">A station loses the network often, so the counter screen must keep working offline. This strip is how the clerk knows.</p>
+        <p style="font-size:13px;color:var(--muted);margin-top:10px">A station loses the network often, so the counter screen must keep working offline. "Complete sale" keeps working and syncs once reconnected; "Call next"/"No-show" need a live connection.</p>
       </div></div>
     </div>
   </div>

@@ -8,18 +8,31 @@ use App\Auth\Session;
 use App\Http\Request;
 use App\Repositories\AuditLogRepository;
 use App\Repositories\CounterRepository;
+use App\Repositories\SaleRepository;
 use App\Repositories\ServiceRepository;
 use App\Repositories\TokenRepository;
 use App\Services\QueueingService;
 
 final class TokenController
 {
+    // Allow-lists for sale details - these mirror the fixed <option> values
+    // in public/index.html's Quick sale form. A client sending anything
+    // outside these gets rejected rather than silently stored.
+    private const ALLOWED_TRIPS = [
+        '17:30 Kampala → Mukono',
+        '18:30 Mukono → Kampala',
+        '19:50 Kampala → Mukono',
+    ];
+    private const ALLOWED_CLASS_FEES = [2000, 5000];
+    private const ALLOWED_PAYMENT_METHODS = ['Cash', 'MTN MoMo', 'Airtel Money'];
+
     public function __construct(
         private TokenRepository $tokens = new TokenRepository(),
         private ServiceRepository $services = new ServiceRepository(),
         private CounterRepository $counters = new CounterRepository(),
         private QueueingService $queueing = new QueueingService(),
         private AuditLogRepository $audit = new AuditLogRepository(),
+        private SaleRepository $sales = new SaleRepository(),
     ) {
     }
 
@@ -77,23 +90,77 @@ final class TokenController
         echo json_encode(['token' => $token]);
     }
 
+    /**
+     * Completes whoever is being served at this counter. Optionally takes
+     * sale details (trip/classFee/qty/paymentMethod) in the body - required
+     * in full if the token being completed is a "ticket" service, rejected
+     * if sent for any other service (nothing to sell there), ignored (no
+     * sale recorded) if omitted entirely.
+     */
     public function complete(array $params): void
-    {
-        $this->finish($params, 'done');
-    }
-
-    public function noShow(array $params): void
-    {
-        $this->finish($params, 'noshow');
-    }
-
-    private function finish(array $params, string $status): void
     {
         Guard::requireRole(['clerk', 'supervisor', 'admin']);
         Guard::requireCsrf();
 
         $counter = (int) ($params['number'] ?? 0);
-        $token = $status === 'done' ? $this->tokens->complete($counter) : $this->tokens->noShow($counter);
+        $body = Request::jsonBody();
+        $hasSaleData = $body !== [];
+
+        $serving = $this->tokens->servingAtCounter($counter);
+        if ($serving === null) {
+            http_response_code(409);
+            echo json_encode(['error' => 'No one is being served at that counter']);
+            return;
+        }
+
+        $service = $this->services->find((int) $serving['service_id']);
+        $isTicketSale = $service !== null && $service['code'] === 'ticket';
+
+        if ($hasSaleData && !$isTicketSale) {
+            http_response_code(422);
+            echo json_encode(['error' => 'This service does not take a sale']);
+            return;
+        }
+
+        $trip = (string) ($body['trip'] ?? '');
+        $classFee = (int) ($body['classFee'] ?? 0);
+        $qty = (int) ($body['qty'] ?? 0);
+        $paymentMethod = (string) ($body['paymentMethod'] ?? '');
+
+        if ($hasSaleData && (
+            !in_array($trip, self::ALLOWED_TRIPS, true)
+            || !in_array($classFee, self::ALLOWED_CLASS_FEES, true)
+            || $qty < 1 || $qty > 10
+            || !in_array($paymentMethod, self::ALLOWED_PAYMENT_METHODS, true)
+        )) {
+            http_response_code(422);
+            echo json_encode(['error' => 'Invalid sale details']);
+            return;
+        }
+
+        $token = $this->tokens->complete($counter);
+        if ($token === null) {
+            // the check above should prevent this, but stay defensive against
+            // a race with another request completing/no-showing first
+            http_response_code(409);
+            echo json_encode(['error' => 'No one is being served at that counter']);
+            return;
+        }
+
+        $sale = $hasSaleData ? $this->sales->record((int) $token['id'], $trip, $classFee, $qty, $paymentMethod) : null;
+
+        $user = Session::user();
+        $this->audit->log($user['id'] ?? null, 'complete_sale', (int) $token['id'], $counter);
+        echo json_encode(['token' => $token, 'sale' => $sale]);
+    }
+
+    public function noShow(array $params): void
+    {
+        Guard::requireRole(['clerk', 'supervisor', 'admin']);
+        Guard::requireCsrf();
+
+        $counter = (int) ($params['number'] ?? 0);
+        $token = $this->tokens->noShow($counter);
 
         if ($token === null) {
             http_response_code(409);
@@ -102,7 +169,7 @@ final class TokenController
         }
 
         $user = Session::user();
-        $this->audit->log($user['id'] ?? null, $status === 'done' ? 'complete_sale' : 'no_show', (int) $token['id'], $counter);
+        $this->audit->log($user['id'] ?? null, 'no_show', (int) $token['id'], $counter);
         echo json_encode(['token' => $token]);
     }
 }

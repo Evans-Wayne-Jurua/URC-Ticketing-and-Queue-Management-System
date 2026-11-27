@@ -1,7 +1,9 @@
 // UI layer: reads the local cache (kept in sync with the API by state/store.js)
 // and writes it into the DOM. Kiosk, board, clerk and dashboard all update here.
 import { $, fmtMin } from "./dom.js";
-import { cache, hasRole } from "../state/store.js";
+import { cache, hasRole, isLocallyCompleted } from "../state/store.js";
+import { isOffline } from "../state/offline.js";
+import { count as pendingSalesCount } from "../state/pendingSales.js";
 import { lang } from "../domain/i18n.js";
 import { drawChart } from "./chart.js";
 
@@ -68,26 +70,45 @@ function renderClerk() {
   $("ctrLabel").textContent = activeCounter || "—";
 
   var q = cache.queue || { waiting: [], serving: [] };
-  var mine = activeCounter ? q.serving.find(function (t) { return t.counter === activeCounter; }) : undefined;
+  var completedLocally = activeCounter && isLocallyCompleted(activeCounter);
+  var mine = (activeCounter && !completedLocally)
+    ? q.serving.find(function (t) { return t.counter === activeCounter; })
+    : undefined;
+  var offline = isOffline();
 
   var nEl = $("clerkNum");
   nEl.textContent = mine ? mine.code : "No one";
   nEl.className = "n tnum" + (mine ? "" : " empty");
   $("clerkMeta").textContent = !activeCounter
     ? "No counters are open — ask a supervisor to open one."
-    : mine
-      ? serviceLabel(mine.serviceId) + " · waited " + fmtMin(mine.waitedMinutes) + " · serving " + mine.servingMinutes + " min"
-      : (q.waiting.length ? q.waiting.length + " waiting — press “Call next”" : "Queue is empty");
+    : completedLocally
+      ? "Sale recorded on this machine — waiting to sync."
+      : mine
+        ? serviceLabel(mine.serviceId) + " · waited " + fmtMin(mine.waitedMinutes) + " · serving " + mine.servingMinutes + " min"
+        : (q.waiting.length ? q.waiting.length + " waiting — press “Call next”" : "Queue is empty");
 
-  $("btnNext").disabled = !activeCounter || !!mine || !q.waiting.length;
+  // "Call next"/"no-show" need live shared state - blocked offline.
+  // "Complete sale" stays available: it finalizes something that already
+  // physically happened at a counter this clerk already owns, and gets
+  // queued locally instead (see state/pendingSales.js).
+  $("btnNext").disabled = !activeCounter || !!mine || !q.waiting.length || offline;
   $("btnDone").disabled = !mine;
-  $("btnNoShow").disabled = !mine;
+  $("btnNoShow").disabled = !mine || offline;
   $("clerkCount").textContent = q.waiting.length + " in queue";
   $("clerkQueue").innerHTML = q.waiting.length ? q.waiting.slice(0, 10).map(function (t) {
     return "<li><span class='qnum tnum'>" + t.code + "</span>"
       + "<span class='qsvc'>" + serviceLabel(t.serviceId) + "</span>"
       + "<span class='pill " + (t.waitMinutes >= 5 ? "pill-wait" : "pill-done") + " tnum'>" + t.waitMinutes + " min</span></li>";
   }).join("") : "<li><div class='empty-state'>Nobody waiting. Take a number on the kiosk screen.</div></li>";
+
+  var pending = pendingSalesCount();
+  var offlineEl = $("clerkOffline");
+  if (offlineEl) {
+    offlineEl.hidden = !offline && pending === 0;
+    offlineEl.querySelector("[data-offline-text]").textContent = offline
+      ? "Network down — sales are saved on this machine, will sync" + (pending ? " (" + pending + " pending)" : "")
+      : pending + " sale" + (pending === 1 ? "" : "s") + " synced just now, finishing up…";
+  }
 }
 
 function renderDashboard() {

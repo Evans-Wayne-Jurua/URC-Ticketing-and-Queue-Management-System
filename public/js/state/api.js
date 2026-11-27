@@ -39,7 +39,7 @@ export const api = {
 
   takeToken: (service) => request('POST', '/tokens', { service }),
   callNext: (counter) => request('POST', `/counters/${counter}/call-next`),
-  complete: (counter) => request('POST', `/counters/${counter}/complete`),
+  complete: (counter, sale) => request('POST', `/counters/${counter}/complete`, sale),
   noShow: (counter) => request('POST', `/counters/${counter}/no-show`),
   openCounter: (counter) => request('POST', `/counters/${counter}/open`),
   closeCounter: (counter) => request('POST', `/counters/${counter}/close`),

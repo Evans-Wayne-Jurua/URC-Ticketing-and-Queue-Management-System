@@ -5,8 +5,10 @@ import { $, fmtMin } from "./ui/dom.js";
 import { api } from "./state/api.js";
 import {
   cache, refreshAll, refreshPublic, refreshQueue, refreshDashboard,
-  login, logout, isCounterOpen,
+  login, logout, isCounterOpen, markLocallyCompleted, clearLocallyCompleted,
 } from "./state/store.js";
+import { isOffline, markOnline, markOffline, isNetworkError } from "./state/offline.js";
+import * as pendingSales from "./state/pendingSales.js";
 import { COPY, lang, setLang } from "./domain/i18n.js";
 import { render, activeCounter, setActiveCounter } from "./ui/render.js";
 
@@ -51,23 +53,37 @@ document.querySelectorAll(".lang button").forEach(function (b) {
   });
 });
 
-/* ---------------- 1 kiosk ---------------- */
-document.querySelectorAll(".svc").forEach(function (b) {
-  b.addEventListener("click", function () {
-    api.takeToken(b.dataset.svc).then(function (data) {
-      $("issuedNum").textContent = data.token.code;
-      $("issuedWait").textContent = fmtMin(data.estWaitMinutes);
-      $("issuedAhead").textContent = data.ahead === 0 ? "You are next" : data.ahead + " ahead of you";
-      $("kioskPick").hidden = true;
-      $("kioskIssued").hidden = false;
-      return refreshPublic();
-    }).then(function () {
-      render();
-      setTimeout(function () { $("kioskPick").hidden = false; $("kioskIssued").hidden = true; }, 5000);
-    }).catch(function (e) {
+/* ---------------- 1 kiosk ----------------
+ * Offline design: a ticket number is the mechanism for fair ordering, so
+ * issuing a fake/provisional one offline (that doesn't reflect real
+ * arrival order against everyone else) would break fairness once synced.
+ * Instead: retry automatically and transparently until the real request
+ * succeeds, rather than queuing a guess. See claudeSecure.md. */
+function takeToken(serviceCode) {
+  api.takeToken(serviceCode).then(function (data) {
+    markOnline();
+    $("kioskRetryMsg").hidden = true;
+    $("issuedNum").textContent = data.token.code;
+    $("issuedWait").textContent = fmtMin(data.estWaitMinutes);
+    $("issuedAhead").textContent = data.ahead === 0 ? "You are next" : data.ahead + " ahead of you";
+    $("kioskPick").hidden = true;
+    $("kioskIssued").hidden = false;
+    return refreshPublic();
+  }).then(function () {
+    render();
+    setTimeout(function () { $("kioskPick").hidden = false; $("kioskIssued").hidden = true; }, 5000);
+  }).catch(function (e) {
+    if (isNetworkError(e)) {
+      markOffline();
+      $("kioskRetryMsg").hidden = false;
+      setTimeout(function () { takeToken(serviceCode); }, 3000);
+    } else {
       alert(e.message || "Could not take a number right now.");
-    });
+    }
   });
+}
+document.querySelectorAll(".svc").forEach(function (b) {
+  b.addEventListener("click", function () { takeToken(b.dataset.svc); });
 });
 
 /* ---------------- login / logout (shared pattern for clerk + supervisor) ---------------- */
@@ -106,12 +122,51 @@ $("ctrPick").addEventListener("change", function (e) {
 $("btnNext").addEventListener("click", function () {
   api.callNext(activeCounter).then(refreshQueue).then(render).catch(function (e) { alert(e.message); });
 });
+
+/* "Complete sale" is the one clerk action allowed to queue offline - see
+ * claudeSecure.md: it finalizes something that already physically
+ * happened at a counter this clerk already owns, unlike "call next" /
+ * "no-show" which depend on live shared queue state. */
 $("btnDone").addEventListener("click", function () {
-  api.complete(activeCounter)
+  var q = cache.queue || { serving: [] };
+  var mine = activeCounter ? q.serving.find(function (t) { return t.counter === activeCounter; }) : undefined;
+  var ticketService = cache.services.find(function (s) { return s.code === "ticket"; });
+  var isTicketSale = !!(mine && ticketService && mine.serviceId === ticketService.id);
+
+  var saleBody;
+  if (isTicketSale) {
+    saleBody = {
+      trip: $("saleTrip").value,
+      classFee: parseInt($("saleClass").value, 10),
+      qty: parseInt($("saleQty").value, 10) || 1,
+      paymentMethod: $("salePay").value,
+    };
+  }
+
+  function queueLocally() {
+    pendingSales.add({ counter: activeCounter, sale: saleBody || null });
+    markLocallyCompleted(activeCounter);
+    render();
+  }
+
+  if (isOffline()) {
+    queueLocally();
+    return;
+  }
+
+  api.complete(activeCounter, saleBody)
     .then(function () { return Promise.all([refreshQueue(), refreshPublic()]); })
     .then(render)
-    .catch(function (e) { alert(e.message); });
+    .catch(function (e) {
+      if (isNetworkError(e)) {
+        markOffline();
+        queueLocally();
+      } else {
+        alert(e.message);
+      }
+    });
 });
+
 $("btnNoShow").addEventListener("click", function () {
   api.noShow(activeCounter)
     .then(function () { return Promise.all([refreshQueue(), refreshPublic()]); })
@@ -157,10 +212,39 @@ $("autoArr").addEventListener("change", function (e) {
 });
 
 /* ---------------- bootstrap ---------------- */
+function flushPendingSales() {
+  var items = pendingSales.list();
+  if (!items.length) return Promise.resolve();
+
+  var chain = Promise.resolve();
+  items.forEach(function (item) {
+    chain = chain.then(function () {
+      return api.complete(item.counter, item.sale || undefined).then(function () {
+        pendingSales.remove(item.id);
+        clearLocallyCompleted(item.counter);
+      }).catch(function (e) {
+        if (isNetworkError(e)) return; // still offline - leave it queued, retry next tick
+        // state diverged server-side - don't retry forever, but say so loudly
+        pendingSales.remove(item.id);
+        clearLocallyCompleted(item.counter);
+        alert("A queued sale for counter " + item.counter + " could not be synced automatically (" + e.message + ") — please check with a supervisor.");
+      });
+    });
+  });
+  return chain;
+}
+
 function tick() {
   refreshPublic()
+    .then(function () {
+      markOnline();
+      if (pendingSales.list().length > 0) return flushPendingSales();
+    })
     .then(function () { return Promise.all([refreshQueue(), refreshDashboard()]); })
-    .then(render);
+    .then(render)
+    .catch(function (e) {
+      if (isNetworkError(e)) { markOffline(); render(); }
+    });
 }
 
 showScreen(screenFromHash());
