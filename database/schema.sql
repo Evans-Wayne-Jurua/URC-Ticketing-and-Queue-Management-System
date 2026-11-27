@@ -51,15 +51,23 @@ CREATE TABLE IF NOT EXISTS tokens (
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS sales (
-    id             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    token_id       INT UNSIGNED NULL,
-    trip           VARCHAR(100) NOT NULL,
-    class_fee      INT UNSIGNED NOT NULL,
-    qty            TINYINT UNSIGNED NOT NULL DEFAULT 1,
-    payment_method VARCHAR(30) NOT NULL,
-    total          INT UNSIGNED NOT NULL,
-    created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (token_id) REFERENCES tokens(id)
+    id                 INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    token_id           INT UNSIGNED NULL,
+    trip               VARCHAR(100) NOT NULL,
+    class_fee          INT UNSIGNED NOT NULL,
+    qty                TINYINT UNSIGNED NOT NULL DEFAULT 1,
+    payment_method     VARCHAR(30) NOT NULL,
+    -- The payer's mobile money reference (MTN MoMo/Airtel Money only - this
+    -- system never talks to those providers' APIs, see claudeSecure.md; it
+    -- just records the claim and stops the SAME reference being reused
+    -- across sales). NULL for Cash, where no reference exists.
+    payment_reference  VARCHAR(50) NULL,
+    total              INT UNSIGNED NOT NULL,
+    created_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (token_id) REFERENCES tokens(id),
+    -- MySQL/MariaDB allow multiple NULLs through a UNIQUE index, so Cash
+    -- sales (NULL reference) never collide with each other here.
+    UNIQUE KEY uq_sales_payment_reference (payment_reference)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS audit_log (

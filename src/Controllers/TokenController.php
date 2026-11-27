@@ -8,6 +8,7 @@ use App\Auth\Session;
 use App\Http\Request;
 use App\Repositories\AuditLogRepository;
 use App\Repositories\CounterRepository;
+use App\Repositories\DuplicateReferenceException;
 use App\Repositories\SaleRepository;
 use App\Repositories\ServiceRepository;
 use App\Repositories\TokenRepository;
@@ -25,6 +26,9 @@ final class TokenController
     ];
     private const ALLOWED_CLASS_FEES = [2000, 5000];
     private const ALLOWED_PAYMENT_METHODS = ['Cash', 'MTN MoMo', 'Airtel Money'];
+    // Methods that generate a payer-visible transaction reference this
+    // system can record (not verify - see claudeSecure.md). Cash has none.
+    private const MOBILE_MONEY_METHODS = ['MTN MoMo', 'Airtel Money'];
 
     public function __construct(
         private TokenRepository $tokens = new TokenRepository(),
@@ -126,6 +130,8 @@ final class TokenController
         $classFee = (int) ($body['classFee'] ?? 0);
         $qty = (int) ($body['qty'] ?? 0);
         $paymentMethod = (string) ($body['paymentMethod'] ?? '');
+        $paymentReference = isset($body['paymentReference']) ? trim((string) $body['paymentReference']) : null;
+        $isMobileMoney = in_array($paymentMethod, self::MOBILE_MONEY_METHODS, true);
 
         if ($hasSaleData && (
             !in_array($trip, self::ALLOWED_TRIPS, true)
@@ -138,6 +144,27 @@ final class TokenController
             return;
         }
 
+        // Mobile money must carry a plausible reference; Cash must not carry
+        // one at all (nothing for it to refer to) - keeps the contract
+        // unambiguous rather than silently ignoring a stray value.
+        if ($hasSaleData && $isMobileMoney
+            && ($paymentReference === null || !preg_match('/^[A-Za-z0-9._\-]{4,50}$/', $paymentReference))
+        ) {
+            http_response_code(422);
+            echo json_encode(['error' => 'A valid transaction reference is required for mobile money']);
+            return;
+        }
+        if ($hasSaleData && !$isMobileMoney && $paymentReference !== null && $paymentReference !== '') {
+            http_response_code(422);
+            echo json_encode(['error' => 'Cash payments do not take a transaction reference']);
+            return;
+        }
+        if ($hasSaleData && $isMobileMoney && $this->sales->referenceExists($paymentReference)) {
+            http_response_code(409);
+            echo json_encode(['error' => 'This transaction reference has already been used for another sale']);
+            return;
+        }
+
         $token = $this->tokens->complete($counter);
         if ($token === null) {
             // the check above should prevent this, but stay defensive against
@@ -147,7 +174,34 @@ final class TokenController
             return;
         }
 
-        $sale = $hasSaleData ? $this->sales->record((int) $token['id'], $trip, $classFee, $qty, $paymentMethod) : null;
+        $sale = null;
+        if ($hasSaleData) {
+            try {
+                $sale = $this->sales->record(
+                    (int) $token['id'],
+                    $trip,
+                    $classFee,
+                    $qty,
+                    $paymentMethod,
+                    $isMobileMoney ? $paymentReference : null,
+                );
+            } catch (DuplicateReferenceException $e) {
+                // Lost a race against another request using the same
+                // reference between the pre-check above and this insert -
+                // the token is already completed at this point (correctly:
+                // the service was still rendered), the sale just isn't
+                // recorded. Surfaced clearly rather than silently dropped.
+                $user = Session::user();
+                $this->audit->log($user['id'] ?? null, 'complete_sale', (int) $token['id'], $counter);
+                http_response_code(409);
+                echo json_encode([
+                    'token' => $token,
+                    'sale' => null,
+                    'error' => 'This transaction reference has already been used for another sale',
+                ]);
+                return;
+            }
+        }
 
         $user = Session::user();
         $this->audit->log($user['id'] ?? null, 'complete_sale', (int) $token['id'], $counter);

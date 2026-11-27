@@ -199,6 +199,7 @@ main{max-width:1400px;margin:0 auto;padding:20px 16px 64px}
 .total b{font-size:26px;letter-spacing:-.02em}
 .offline{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--waiting);
   background:var(--waiting-soft);padding:10px 14px;border-radius:10px}
+.offline[hidden]{display:none} /* same fix as .kiosk-wrap[hidden] - its own display:flex otherwise beats [hidden] */
 
 /* dashboard */
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}

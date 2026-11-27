@@ -18,9 +18,22 @@ async function request(method, path, body) {
     opts.headers['X-CSRF-Token'] = csrfToken;
   }
 
+  // fetch() itself throwing (no .status) is the ONLY real "offline" signal
+  // (state/offline.js relies on this). Anything after a response actually
+  // arrives - including a response body that fails to parse - must still
+  // carry a .status, or a mangled/empty body would get misread as "offline"
+  // when the server was actually reachable and just returned something odd.
   const res = await fetch('/api' + path, opts);
-  const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
+
+  let data = null;
+  try {
+    const text = await res.text();
+    data = text ? JSON.parse(text) : null;
+  } catch (parseErr) {
+    const err = new Error('Unexpected response from server (HTTP ' + res.status + ')');
+    err.status = res.status;
+    throw err;
+  }
 
   if (!res.ok) {
     const err = new Error((data && data.error) || ('HTTP ' + res.status));

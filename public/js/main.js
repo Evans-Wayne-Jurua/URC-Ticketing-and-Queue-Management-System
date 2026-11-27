@@ -135,12 +135,16 @@ $("btnDone").addEventListener("click", function () {
 
   var saleBody;
   if (isTicketSale) {
+    var paymentMethod = $("salePay").value;
     saleBody = {
       trip: $("saleTrip").value,
       classFee: parseInt($("saleClass").value, 10),
       qty: parseInt($("saleQty").value, 10) || 1,
-      paymentMethod: $("salePay").value,
+      paymentMethod: paymentMethod,
     };
+    if (MOBILE_MONEY_METHODS.indexOf(paymentMethod) !== -1) {
+      saleBody.paymentReference = $("saleRef").value.trim();
+    }
   }
 
   function queueLocally() {
@@ -182,6 +186,18 @@ function saleTotal() {
   $(id).addEventListener("input", saleTotal);
   $(id).addEventListener("change", saleTotal);
 });
+
+// A transaction reference only makes sense for mobile money - Cash has
+// none. See claudeSecure.md: this system records the reference, it never
+// calls MTN/Airtel's API to verify it.
+var MOBILE_MONEY_METHODS = ["MTN MoMo", "Airtel Money"];
+function updateSaleRefVisibility() {
+  var needsRef = MOBILE_MONEY_METHODS.indexOf($("salePay").value) !== -1;
+  $("saleRefField").hidden = !needsRef;
+  if (!needsRef) $("saleRef").value = "";
+}
+$("salePay").addEventListener("change", updateSaleRefVisibility);
+updateSaleRefVisibility();
 
 /* ---------------- 4 supervisor: open/close counters ---------------- */
 $("ctrStatus").addEventListener("click", function (e) {
