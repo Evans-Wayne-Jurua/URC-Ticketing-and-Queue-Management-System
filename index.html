@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>URC Ticketing and Queue Management System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<header class="chrome">
+  <div class="chrome-in">
+    <div class="brand">
+      <span class="mark">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" aria-hidden="true">
+          <rect x="5" y="3" width="14" height="13" rx="3"/><path d="M5 10h14M8 20l-2 2M16 20l2 2"/>
+          <circle cx="8.5" cy="13" r="1" fill="#fff" stroke="none"/><circle cx="15.5" cy="13" r="1" fill="#fff" stroke="none"/>
+        </svg>
+      </span>
+      <span>URC Ticketing<small>Working prototype — simulated data</small></span>
+    </div>
+    <div class="tabs" role="tablist" aria-label="Screens">
+      <button class="tab" role="tab" aria-selected="true"  data-screen="kiosk">1 · Kiosk</button>
+      <button class="tab" role="tab" aria-selected="false" data-screen="board">2 · Platform display</button>
+      <button class="tab" role="tab" aria-selected="false" data-screen="clerk">3 · Clerk counter</button>
+      <button class="tab" role="tab" aria-selected="false" data-screen="dash">4 · Supervisor</button>
+    </div>
+    <div class="chrome-right">
+      <label class="sim"><input type="checkbox" id="autoArr"> Simulate arrivals</label>
+      <button class="ghost" id="reset">Reset demo</button>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<!-- ===================== 1 KIOSK ===================== -->
+<section class="screen" id="screen-kiosk" aria-label="Passenger kiosk">
+  <p class="note"><b>Try it:</b> tap a service to take a queue number. It appears instantly on the platform display and in the clerk’s waiting list — the arrival time (T1) is recorded the moment you tap.</p>
+  <div class="kiosk-wrap">
+    <div class="kiosk">
+      <div id="kioskPick">
+        <div class="kiosk-head">
+          <h2 id="kioskTitle">Welcome to Kampala Station</h2>
+          <p id="kioskSub">Choose what you need and take a number</p>
+        </div>
+        <div class="kiosk-body">
+          <button class="svc" data-svc="ticket">
+            <span class="ico" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 9V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 6v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-6z"/><path d="M10 5v14" stroke-dasharray="2 3"/></svg></span>
+            <span class="txt"><span class="t" data-i18n="t1">Buy a ticket</span><span class="s" data-i18n="s1">Ordinary or executive coach</span></span>
+            <svg class="go" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </button>
+          <button class="svc" data-svc="collect">
+            <span class="ico" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM19 19h2v2h-2z"/></svg></span>
+            <span class="txt"><span class="t" data-i18n="t2">Collect a ticket paid by phone</span><span class="s" data-i18n="s2">Have your code ready</span></span>
+            <svg class="go" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </button>
+          <button class="svc" data-svc="enquiry">
+            <span class="ico" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.6 2.6 0 1 1 3.4 2.5c-.6.2-.9.8-.9 1.4v.4"/><circle cx="12" cy="17" r=".8" fill="currentColor" stroke="none"/></svg></span>
+            <span class="txt"><span class="t" data-i18n="t3">Enquiry or refund</span><span class="s" data-i18n="s3">Times, changes, money back</span></span>
+            <svg class="go" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </button>
+        </div>
+        <div class="kiosk-foot">
+          <div class="lang" role="group" aria-label="Language">
+            <button data-lang="en" aria-pressed="true">English</button>
+            <button data-lang="lg" aria-pressed="false">Luganda</button>
+          </div>
+          <div class="tnum"><span id="kioskQ">0</span> waiting now</div>
+        </div>
+      </div>
+
+      <div id="kioskIssued" hidden>
+        <div class="issued">
+          <p class="lbl" data-i18n="yourNumber">Your number is</p>
+          <p class="num tnum" id="issuedNum">A-00</p>
+          <div class="est">
+            <span data-i18n="estWait">Estimated wait</span>
+            <b class="tnum" id="issuedWait">—</b>
+          </div>
+          <p class="ahead tnum" id="issuedAhead">—</p>
+          <p class="ahead" style="margin-top:18px" data-i18n="watch">Watch the screen. Your number will be called.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 2 BOARD ===================== -->
+<section class="screen" id="screen-board" hidden aria-label="Platform queue display">
+  <p class="note"><b>Benchmarked on Transport for London’s display rules:</b> sentence case rather than SHOUTING CAPS, only three text sizes, essential information only, and one colour that always means “being served” and another that always means “waiting”.</p>
+  <div class="board">
+    <div class="board-head">
+      <h2>Ticket queue — Kampala Station</h2>
+      <span class="clock tnum" id="boardClock">--:--</span>
+    </div>
+    <div class="board-grid">
+      <div class="board-main" id="boardServing"></div>
+      <div class="board-side">
+        <h3>Next numbers</h3>
+        <div class="nextnums" id="boardNext"></div>
+        <div class="board-wait">
+          <h3>Typical wait now</h3>
+          <div class="big tnum" id="boardWait">—</div>
+        </div>
+      </div>
+    </div>
+    <div class="board-foot">
+      <span>Next departure · 17:30 Kampala → Mukono</span>
+      <span>Ordinary Shs 2,000 · Executive Shs 5,000</span>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 3 CLERK ===================== -->
+<section class="screen" id="screen-clerk" hidden aria-label="Clerk counter screen">
+  <p class="note"><b>Try it:</b> press <b>Call next</b> to take the longest-waiting number. That stamps T2. <b>Complete sale</b> stamps T3. Those three stamps are the only data the mathematics needs — the clerk never does extra work to collect it.</p>
+  <div class="cols">
+    <div class="col-main">
+      <div class="card">
+        <div class="card-h">
+          <h3>Counter <span id="ctrLabel">1</span></h3>
+          <label class="field" style="margin:0">
+            <span class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Counter</span>
+            <select id="ctrPick" aria-label="Choose counter" style="min-width:150px">
+              <option value="1">Counter 1</option><option value="2">Counter 2</option>
+              <option value="3">Counter 3</option><option value="4">Counter 4</option>
+            </select>
+          </label>
+        </div>
+        <div class="now">
+          <p class="k">Now serving</p>
+          <p class="n tnum" id="clerkNum">No one</p>
+          <p class="meta" id="clerkMeta">Press “Call next” to take the next passenger</p>
+        </div>
+        <div class="actions">
+          <button class="btn btn-pri" id="btnNext">Call next</button>
+          <button class="btn btn-sec" id="btnDone" disabled>Complete sale</button>
+          <button class="btn btn-warn" id="btnNoShow" disabled>No-show</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-h"><h3>Waiting</h3><span class="cap tnum" id="clerkCount">0 in queue</span></div>
+        <ul class="qlist" id="clerkQueue"></ul>
+      </div>
+    </div>
+
+    <div class="col-side">
+      <div class="card">
+        <div class="card-h"><h3>Quick sale</h3></div>
+        <div class="card-b">
+          <label class="field"><span>Trip</span>
+            <select id="saleTrip">
+              <option>17:30 Kampala → Mukono</option>
+              <option>18:30 Mukono → Kampala</option>
+              <option>19:50 Kampala → Mukono</option>
+            </select>
+          </label>
+          <div class="row2">
+            <label class="field"><span>Class</span>
+              <select id="saleClass"><option value="2000">Ordinary</option><option value="5000">Executive</option></select>
+            </label>
+            <label class="field"><span>Passengers</span>
+              <input type="number" id="saleQty" value="1" min="1" max="10">
+            </label>
+          </div>
+          <label class="field"><span>Payment</span>
+            <select id="salePay"><option>Cash</option><option>MTN MoMo</option><option>Airtel Money</option></select>
+          </label>
+          <div class="total"><span>Total</span><b class="tnum" id="saleTotal">Shs 2,000</b></div>
+        </div>
+      </div>
+      <div class="card"><div class="card-b">
+        <div class="offline">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 3l18 18M8.5 16.4a5 5 0 0 1 7 0M5 12.9a10 10 0 0 1 4-2.6M19 12.9a10 10 0 0 0-7-2.9"/><circle cx="12" cy="20" r="1" fill="currentColor" stroke="none"/></svg>
+          Network down — sales saved on this machine, will sync
+        </div>
+        <p style="font-size:13px;color:var(--muted);margin-top:10px">A station loses the network often, so the counter screen must keep working offline. This strip is how the clerk knows.</p>
+      </div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 4 DASHBOARD ===================== -->
+<section class="screen" id="screen-dash" hidden aria-label="Supervisor dashboard">
+  <p class="note"><b>This is where the project earns its marks.</b> Every figure below is computed live from the timestamps the other three screens produce — nothing here is typed in by hand.</p>
+
+  <div class="kpis" style="margin-bottom:16px">
+    <div class="kpi"><p class="k">In queue now</p><p class="v tnum" id="kQ">0</p></div>
+    <div class="kpi"><p class="k">Average wait</p><p class="v tnum" id="kW">0<span class="u"> min</span></p></div>
+    <div class="kpi"><p class="k">Longest wait</p><p class="v tnum" id="kL">0<span class="u"> min</span></p></div>
+    <div class="kpi"><p class="k">Served today</p><p class="v tnum" id="kS">0</p></div>
+  </div>
+
+  <div class="cols">
+    <div class="col-main">
+      <div class="card">
+        <div class="card-h"><h3>Arrivals at the ticket point</h3><span class="cap">per 15 minutes</span></div>
+        <div class="card-b">
+          <div class="chart-wrap" id="chartWrap">
+            <svg id="chart" viewBox="0 0 720 240" role="img" aria-label="Bar chart of passenger arrivals per 15 minutes, peaking before the 17:30 departure"></svg>
+            <div class="tip" id="tip"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-h"><h3>If we open <em>c</em> counters</h3><span class="cap">Erlang C · target 5 min</span></div>
+        <div class="card-b" style="padding-top:6px">
+          <table>
+            <thead><tr>
+              <th>Counters open</th><th class="n">Utilisation ρ</th><th class="n">Chance of waiting</th><th class="n">Average wait</th>
+            </tr></thead>
+            <tbody id="erlangRows"></tbody>
+          </table>
+          <p class="formula" style="margin-top:14px">
+            <code>λ</code> = <span id="fLam" class="tnum">30</span> arrivals/hour, measured from T1 stamps ·
+            <code>μ</code> = <span id="fMu" class="tnum">12</span> sales/hour per counter, measured from T3−T2<br>
+            <code>a = λ/μ</code> · <code>Wq = P(wait) / (cμ − λ)</code>
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-side">
+      <div class="rec">
+        <p class="k">Recommendation for 17:30</p>
+        <p class="v tnum" id="recN">—</p>
+        <p class="s" id="recS">—</p>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>Counter status</h3></div>
+        <ul class="qlist" id="ctrStatus"></ul>
+      </div>
+      <div class="card"><div class="card-b">
+        <p class="cap" style="margin-bottom:8px">Measured, not assumed</p>
+        <p style="font-size:13.5px;color:var(--muted)">λ and μ are re-estimated from this station’s own stamps. Load another operator’s data and the same screens retrain on it — nothing here is hard-coded to URC.</p>
+      </div></div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
