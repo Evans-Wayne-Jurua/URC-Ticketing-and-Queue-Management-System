@@ -38,24 +38,48 @@ and accepted.
 ## Repo structure (current)
 
 ```
-index.html              markup only
-css/styles.css          all styles
-js/
-  state/store.js        in-memory data layer — the one file that becomes
-                         real API calls once the backend exists
-  domain/
-    queueing.js          pure Erlang-C math, no DOM — unit-testable
-    i18n.js               translation content + current language
-  ui/
-    dom.js                $ / formatting helpers
-    chart.js              SVG arrivals chart
-    render.js             updates all four screens from state+domain data
-  main.js                 event wiring, app bootstrap
+public/                  the ONLY web-reachable folder (Apache/Azure doc root)
+  index.html              markup only
+  css/styles.css          all styles
+  js/
+    state/store.js         in-memory data layer — the one file that becomes
+                            real API calls once the frontend is wired to the API
+    domain/
+      queueing.js           pure Erlang-C math, no DOM — unit-testable
+      i18n.js                translation content + current language
+    ui/
+      dom.js                 $ / formatting helpers
+      chart.js               SVG arrivals chart
+      render.js              updates all four screens from state+domain data
+    main.js                  event wiring, app bootstrap
+  api/
+    index.php               front controller (dispatches via src/Http/Router)
+    .htaccess                routes unmatched requests to index.php (Apache)
+  router.php               equivalent routing for `php -S` (local dev only;
+                            the built-in server ignores .htaccess)
+src/                      PHP backend, PSR-4 autoloaded as App\
+  Support/Env.php          minimal .env loader (local dev only)
+  Config/Database.php      PDO factory, reads DB_* env vars
+  Http/Router.php           small method+path-pattern router
+  Controllers/
+    HealthController.php    GET /api/health — proves router→DB pipe works
+  routes.php                route table
+database/schema.sql       services/counters/tokens/sales/users/audit_log +
+                          seed data matching the frontend's current defaults
+composer.json             PSR-4 autoload only, no framework/dependencies yet
+.env.example              template; real .env is local-only (gitignored)
 ```
+
+Local dev DB: XAMPP's MariaDB, database `urc_ticketing`, applied via
+`database/schema.sql`. Run the backend locally with
+`composer run serve` (or `php -S 127.0.0.1:8000 -t public public/router.php`),
+then open `http://127.0.0.1:8000/` — this serves the frontend AND the API
+from one origin, matching the planned Azure setup.
 
 Git: initialized this session, no remote yet. Commits so far (oldest first):
 baseline single-file prototype → layering refactor → counter open/close
-domain fix → layout fix found while testing.
+domain fix → layout fix found while testing → CLAUDE.md added → PHP backend
+scaffold (frontend moved into public/, composer/router/schema/health-check).
 
 ## Domain model notes worth remembering
 
@@ -98,26 +122,29 @@ domain fix → layout fix found while testing.
    none are open. Found and fixed a real layout bug this way — the
    counter-status rows were too narrow for the pill + new button and the text
    wrapped/collided; fixed by right-aligning pill+button on their own line.
-7. **Started backend scaffolding** — confirmed the local toolchain: PHP 8.2.12,
-   Composer 2.11.1, `pdo_mysql`/`pdo_sqlite` extensions all available, and
-   that XAMPP's MariaDB is installed and running locally. No backend files
-   created yet — this is the next thing to pick up.
+7. **Scaffolded the PHP backend and verified it end-to-end**: moved the
+   frontend into `public/` (web-root boundary), added `composer.json`
+   (PSR-4 only, no framework), a minimal `.env` loader, a PDO `Database`
+   factory, a small `Router`, `database/schema.sql` (mirrors the JS domain
+   model exactly, including `counters.is_open`), and a first
+   `GET /api/health` endpoint. Confirmed locally: schema applied to XAMPP's
+   real MariaDB, PHP's built-in server smoke-tested (health check hits the
+   live DB, unknown routes 404), and the full kiosk → board → clerk →
+   supervisor flow re-driven with Playwright through the PHP server with
+   zero console errors — same result as the earlier pure-frontend test, so
+   moving everything into `public/` didn't break anything.
 
 ## Next steps (where to resume)
 
-1. Scaffold the PHP backend: `composer.json` (PSR-4, `App\` → `src/`),
-   `public/` web-root (move `index.html`/`css/`/`js/` into it),
-   `public/api/index.php` front controller + tiny router,
-   `config/database.php` (PDO factory reading env vars), `database/schema.sql`
-   mirroring the JS domain model, `.env.example`.
-2. One proof-of-life endpoint (`GET /api/health` hitting MySQL) before
-   building anything else.
-3. Users table + login/logout/session + RBAC guard.
-4. Port the queueing math (`js/domain/queueing.js`) to a PHP service class;
-   build token endpoints; point `js/state/store.js` at the real API instead
-   of in-memory state (that's the one frontend file this should touch).
-5. Audit log, security headers, rate limiting on login.
-6. Azure resources (App Service + Database for MySQL) + GitHub Actions CI/CD.
+1. Users table + login/logout/session (native PHP sessions, not JWT) + an
+   RBAC guard function for protected endpoints.
+2. Port the queueing math (`public/js/domain/queueing.js`) to a PHP service
+   class; build token endpoints (take a number, call next, complete,
+   no-show) and counter open/close endpoints.
+3. Point `public/js/state/store.js` at the real API instead of in-memory
+   state — that should be the one frontend file this touches, by design.
+4. Audit log writes, security headers, rate limiting on login.
+5. Azure resources (App Service + Database for MySQL) + GitHub Actions CI/CD.
 
 ## Running the frontend locally
 
