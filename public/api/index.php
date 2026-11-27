@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 
+use App\Auth\Session;
 use App\Http\Router;
 use App\Support\Env;
 
@@ -9,6 +10,7 @@ $root = dirname(__DIR__, 2);
 require $root . '/vendor/autoload.php';
 
 Env::load($root . '/.env');
+Session::start();
 
 header('Content-Type: application/json; charset=utf-8');
 
