@@ -12,7 +12,11 @@ CREATE TABLE IF NOT EXISTS services (
     code     VARCHAR(20)  NOT NULL UNIQUE,
     prefix   CHAR(1)      NOT NULL,
     label_en VARCHAR(100) NOT NULL,
-    label_lg VARCHAR(100) NOT NULL
+    label_lg VARCHAR(100) NOT NULL,
+    -- next ticket number for this service, e.g. prefix=A, next_seq=8 -> "A-08".
+    -- incremented under SELECT ... FOR UPDATE (see TokenRepository::takeToken)
+    -- so concurrent kiosk taps can never get the same code.
+    next_seq SMALLINT UNSIGNED NOT NULL DEFAULT 0
 ) ENGINE=InnoDB;
 
 -- "open" is an administrative decision a supervisor makes (see CLAUDE.md),

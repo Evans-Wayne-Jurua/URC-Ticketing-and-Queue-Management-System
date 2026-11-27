@@ -6,6 +6,7 @@ namespace App\Controllers;
 use App\Auth\Csrf;
 use App\Auth\Guard;
 use App\Auth\Session;
+use App\Http\Request;
 use App\Services\AuthService;
 
 final class AuthController
@@ -17,7 +18,7 @@ final class AuthController
     /** @param array<string,string> $params */
     public function login(array $params): void
     {
-        $body = $this->jsonBody();
+        $body = Request::jsonBody();
         $email = trim((string) ($body['email'] ?? ''));
         $password = (string) ($body['password'] ?? '');
 
@@ -51,14 +52,5 @@ final class AuthController
     {
         $user = Guard::requireLogin();
         echo json_encode(['user' => $user, 'csrfToken' => Csrf::token()]);
-    }
-
-    /** @return array<string,mixed> */
-    private function jsonBody(): array
-    {
-        $raw = file_get_contents('php://input') ?: '';
-        $data = json_decode($raw, true);
-
-        return is_array($data) ? $data : [];
     }
 }
