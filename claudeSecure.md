@@ -199,6 +199,80 @@ early outside that structure.**
   surfaces a connection string, credentials, or driver details to
   whoever's looking at the response.
 
+## Sales input validation (added after this file was first written)
+
+`src/Controllers/TokenController::complete` optionally accepts sale details
+(`trip`, `classFee`, `qty`, `paymentMethod`) alongside completing a token.
+Every field is checked against an **allow-list** matching the fixed
+`<option>` values in the Quick sale form (`TokenController::ALLOWED_TRIPS`/
+`ALLOWED_CLASS_FEES`/`ALLOWED_PAYMENT_METHODS`) - nothing free-text reaches
+the `sales` table. Two things worth calling out specifically:
+
+- **The total is always server-computed** (`classFee * qty` in
+  `SaleRepository::record`), never taken from the client, even though a
+  client could send a `total` field. Verified directly: sent `"total":
+  999999` alongside valid `classFee`/`qty` and the stored row shows the
+  correctly recomputed total, the tampered value silently ignored. This is
+  the general rule for anything money-shaped: a number the client could
+  have reason to lie about is always recomputed server-side from inputs
+  that are independently constrained (here, an allow-listed fare), never
+  trusted as a passed-through total.
+- **Service-sale coupling is enforced server-side, not just hidden in the
+  UI.** If sale data is sent for a token whose service isn't `ticket`
+  (e.g. `collect`, which represents an already-paid fare), the request is
+  rejected with 422 rather than silently accepted or silently ignored -
+  verified directly via curl, independent of what the frontend sends.
+
+## Offline mode: what is and isn't trusted while disconnected
+
+Added alongside the sales endpoint. The design is **asymmetric by
+intention** - not "queue every action and reconcile later," because not
+every action is safe to guess at without live server state:
+
+- **Kiosk (`public/js/main.js: takeToken`)**: never issues a fake/local
+  ticket number while offline. A ticket number *is* the fairness
+  mechanism (arrival order), so a provisional one that doesn't reflect
+  real order relative to everyone else taking a number in the meantime
+  would misrepresent fairness once synced. Instead it retries the real
+  request automatically and transparently (`public/js/state/offline.js`
+  distinguishes a genuine network failure from an HTTP error response)
+  until it actually succeeds.
+- **Clerk - "Call next" / "No-show" are blocked offline entirely**
+  (`render.js` disables both buttons via `isOffline()`). Both depend on
+  accurate live knowledge of the shared waiting/serving state across all
+  counters; guessing from stale local data risks two counters serving the
+  same token, or skipping someone. Refusing outright is safer than acting
+  on data that might already be wrong.
+- **Clerk - "Complete sale" is the one action allowed to queue offline**
+  (`public/js/state/pendingSales.js`, localStorage). The reasoning: by the
+  time a clerk clicks it, the real-world transaction (passenger served,
+  money collected if any) has already happened - refusing to record it
+  because of a network blip would be worse than queuing it, and it's
+  scoped to a token this clerk's own counter already owned before going
+  offline, so there's no cross-counter race to get wrong. The local UI
+  optimistically marks that counter's "now serving" as cleared
+  (`store.js: markLocallyCompleted`) so the clerk isn't blocked from the
+  (still-offline-disabled) next step, without pretending the server knows
+  yet.
+- **Sync-failure handling is explicit, not silent.** When connectivity
+  returns, queued sales replay in order on the next successful poll. If a
+  replay fails with a genuine network error, it stays queued and retries
+  next time. If it fails with a real HTTP error (meaning server-side state
+  diverged from what the clerk's screen assumed - e.g., something else
+  already changed that token/counter), the item is dropped **and an alert
+  is shown** naming the counter and asking to check with a supervisor,
+  rather than silently losing the record. A diploma-report-worthy
+  principle generally: an offline queue that can fail to replay must
+  surface that failure somewhere a human will see it, not just retry
+  forever or drop quietly.
+
+Verified with Playwright's real network simulation
+(`browserContext.setOffline(true)`), not just code review: confirmed the
+button states, the localStorage queue contents mid-outage, the queued sale
+correctly appearing in the `sales` table within one poll cycle of
+reconnecting, and the kiosk recovering automatically to a real issued
+ticket once back online.
+
 ## What's deliberately NOT done yet (known gaps, not oversights)
 
 - **No admin UI/endpoints** — the `admin` role exists in the schema and
@@ -210,17 +284,20 @@ early outside that structure.**
   report as a known limitation rather than silently ignored.
 - **No dependency scanning configured** (`composer audit` exists as a
   manual command; nothing runs it in CI yet — there is no CI yet).
-- **No offline-mode security model.** The clerk UI has an "offline — will
-  sync" banner that isn't backed by real offline support yet (see
-  `CLAUDE.md`). Whenever that's built, it needs its own thinking: replay
-  protection for queued actions, conflict resolution if a counter was
-  closed while offline, etc. Don't assume today's CSRF/session design
-  automatically covers an offline queue — it doesn't.
-- **The "Quick sale" payment fields** in the clerk UI aren't wired to any
-  backend endpoint yet (no `sales` table writes happen from the app
-  currently, even though the table exists). Nothing to secure yet because
-  nothing real happens there yet — noted so it isn't mistaken for an
-  oversight once it is built.
+- **Offline mode and the sales endpoint are now implemented** (see the
+  dedicated sections above) — this bullet previously said they weren't;
+  left here struck-through in spirit so the history is clear. One real
+  remaining gap from that work: a queued "Complete sale" is replayed using
+  whatever CSRF token/session is current *at sync time*, not a snapshot
+  from when it was queued. If the device is offline long enough for the
+  PHP session to actually expire before reconnecting, the replay fails
+  with a real auth error (not a network error), and per the current logic
+  that's treated as "state diverged" — the item is dropped and the clerk
+  is alerted, not silently retried forever. That's the right failure mode
+  (visible, not silent) but it does mean a long enough outage requires the
+  clerk to log back in and manually redo that specific sale. Acceptable
+  for the realistic short outages this was designed around; worth a line
+  in the diploma report if asked about edge cases.
 - **Replication threads** noticed on the local MariaDB instance
   (`Slave_SQL`, idle) were not part of anything this project configured —
   flagged for the user to check, not assessed further here since they

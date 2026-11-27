@@ -255,14 +255,37 @@ something else, not something this project set up.
    `.kiosk-wrap[hidden]{display:none}` rule in `public/css/styles.css`. If
    a `hidden` element ever "doesn't hide" again, suspect exactly this -
    check whether its class sets `display` anywhere before assuming a JS bug.
+10. **Audit logging, login rate limiting, security headers** - see
+    `claudeSecure.md` for the full detail (this file no longer duplicates
+    it). Short version: every state-changing action writes to `audit_log`;
+    failed logins are throttled per-email (5/15min) via a new
+    `login_attempts` table; `X-Content-Type-Options`/`X-Frame-Options`/
+    `Referrer-Policy`/`Strict-Transport-Security` are set both in PHP
+    (`public/api/index.php`, covers any runtime) and `public/.htaccess`
+    (covers static files under Apache - XAMPP/Azure).
+11. **Sales endpoint + offline mode for kiosk/clerk** - also fully detailed
+    in `claudeSecure.md`. The key design decision, worth remembering: the
+    offline handling is deliberately **asymmetric**, not "queue everything
+    and sync later":
+    - Kiosk retries automatically and transparently on a real network
+      failure rather than issuing a fake provisional ticket number -
+      doing the latter would misorder the real fairness queue once synced.
+    - Clerk: "Call next"/"No-show" are blocked offline (they need live
+      shared queue state); "Complete sale" keeps working and queues to
+      `localStorage` (`public/js/state/pendingSales.js`), because it only
+      finalizes a sale that already physically happened at a counter this
+      clerk already owns. Auto-flushes on the next successful poll.
+    - Verified with a real Playwright `context.setOffline(true)` run, not
+      just unit-level reasoning: buttons disable/stay-enabled correctly,
+      sale queues and later appears correctly in the `sales` table, kiosk
+      recovers and gets a real ticket once reconnected.
 
 ## Next steps (where to resume)
 
-1. Audit log writes (table exists, nothing writes to it yet), security
-   headers, rate limiting on login.
-2. Azure resources (App Service + Database for MySQL) + GitHub Actions CI/CD.
-3. Offline support for the kiosk/clerk screens is still just a UI banner,
-   not implemented - see "Why move state to the API" above.
+Azure resources (App Service + Database for MySQL) + GitHub Actions CI/CD -
+**on hold, explicitly deferred by the user for now.** Don't start this
+without being asked again. Everything else from the original roadmap
+(auth, RBAC, audit logging, rate limiting, sales, offline mode) is done.
 
 ### Current API surface (`src/routes.php`)
 
@@ -280,12 +303,16 @@ POST /api/counters/{n}/open             supervisor/admin, CSRF
 POST /api/counters/{n}/close            supervisor/admin, CSRF (409 if serving)
 POST /api/tokens            {service}   public - kiosk takes a number
 POST /api/counters/{n}/call-next        clerk/supervisor/admin, CSRF
-POST /api/counters/{n}/complete         clerk/supervisor/admin, CSRF
+POST /api/counters/{n}/complete  [sale] clerk/supervisor/admin, CSRF - optional
+                                         {trip,classFee,qty,paymentMethod};
+                                         required+validated for a "ticket"
+                                         service token, 422 for any other
 POST /api/counters/{n}/no-show          clerk/supervisor/admin, CSRF
 ```
 
 All verified against real MySQL this session (full kiosk → clerk →
-supervisor flow, RBAC 403s, 409/422 on invalid state transitions).
+supervisor flow, RBAC 403s, 409/422 on invalid state transitions, sale
+validation, offline queuing/sync).
 
 ## Running the frontend locally
 
