@@ -223,6 +223,28 @@ the `sales` table. Two things worth calling out specifically:
   rejected with 422 rather than silently accepted or silently ignored -
   verified directly via curl, independent of what the frontend sends.
 
+**Confirmed scope decision (2026-11-27): this system is record-only for
+payments, deliberately, not a gap to fill in later.** It never moves money
+and never will - cash changes hands physically at the counter, and mobile
+money (MTN MoMo/Airtel Money) is sent by the passenger independently of
+this app, through the provider's own channel. `sales.payment_method` is
+just the clerk's attestation of which of those happened, tied to their
+account via `audit_log`. There is no payment gateway integration (no API
+keys, no webhooks, no "charge this phone number" call) anywhere in this
+codebase, and none is planned. This meaningfully shrinks the security
+surface compared to a system that actually custodies money - no PCI-ish
+concerns, no payment-provider credentials to protect.
+
+**What this boundary does NOT cover, on purpose:** this system cannot
+verify a clerk's payment claim against the real payment company's own
+records. A clerk marking "Cash" who pocketed it without logging a sale, or
+marking "MTN MoMo" when the passenger never actually paid, is undetectable
+from inside this system alone - that's a reconciliation problem that sits
+with whoever owns the actual payment rails, not with this app. The
+`audit_log` makes every claim attributable to a specific account, which is
+mitigation (accountability after the fact), not prevention. Worth stating
+plainly in the diploma report if asked "how do you know a sale is real."
+
 ## Offline mode: what is and isn't trusted while disconnected
 
 Added alongside the sales endpoint. The design is **asymmetric by
