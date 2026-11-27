@@ -168,15 +168,63 @@ server. A long-running "Opening tables"/"Statistics" state across several
 connections, plus one old `RUNNING` transaction, means restart MySQL rather
 than debugging the query.
 
+**Root cause, found the second time it happened:** it's InnoDB's persistent
+statistics recalculation (`innodb_stats_persistent`/`innodb_stats_auto_recalc`,
+both ON by default) hanging on this XAMPP/MariaDB install the first time a
+query touches a given table in a session. Fixed for the current server
+session with:
+
+```sql
+SET GLOBAL innodb_stats_persistent = 0;
+SET GLOBAL innodb_stats_auto_recalc = 0;
+```
+
+**This does not persist across a MySQL restart** (it's a session-lifetime
+`SET GLOBAL`, not a config file change). If the hang reappears after
+restarting MySQL, re-run those two statements before doing anything else -
+don't re-debug the PHP/PDO code, it was never the cause. For a permanent
+fix, add `innodb_stats_persistent=0` and `innodb_stats_auto_recalc=0` under
+`[mysqld]` in XAMPP's `my.ini` (not done yet - wasn't asked for, and it's a
+system config file outside the project).
+
+Also noticed: this MariaDB instance has several idle `Slave_SQL` replication
+threads ("waiting for the slave I/O thread to update it"). Unrelated to the
+hang (confirmed - they're idle, not holding locks) but unusual for a local
+XAMPP install; worth the user knowing in case it's leftover config from
+something else, not something this project set up.
+
 ## Next steps (where to resume)
 
-1. Port the queueing math (`public/js/domain/queueing.js`) to a PHP service
-   class; build token endpoints (take a number, call next, complete,
-   no-show) and counter open/close endpoints, gated with `Guard::requireRole`.
-2. Point `public/js/state/store.js` at the real API instead of in-memory
+1. Point `public/js/state/store.js` at the real API instead of in-memory
    state — that should be the one frontend file this touches, by design.
-3. Audit log writes, security headers, rate limiting on login.
-4. Azure resources (App Service + Database for MySQL) + GitHub Actions CI/CD.
+   The full REST surface now exists (see below) with the same domain shape
+   the frontend already uses.
+2. Audit log writes (table exists, nothing writes to it yet), security
+   headers, rate limiting on login.
+3. Azure resources (App Service + Database for MySQL) + GitHub Actions CI/CD.
+
+### Current API surface (`src/routes.php`)
+
+```
+GET  /api/health                        public - DB connectivity check
+POST /api/auth/login                    public
+POST /api/auth/logout                   requires session + CSRF header
+GET  /api/auth/me                       requires session
+GET  /api/services                      public - kiosk service list
+GET  /api/board                         public - platform display
+GET  /api/queue                         clerk/supervisor/admin
+GET  /api/dashboard                     supervisor/admin
+GET  /api/counters                      public
+POST /api/counters/{n}/open             supervisor/admin, CSRF
+POST /api/counters/{n}/close            supervisor/admin, CSRF (409 if serving)
+POST /api/tokens            {service}   public - kiosk takes a number
+POST /api/counters/{n}/call-next        clerk/supervisor/admin, CSRF
+POST /api/counters/{n}/complete         clerk/supervisor/admin, CSRF
+POST /api/counters/{n}/no-show          clerk/supervisor/admin, CSRF
+```
+
+All verified against real MySQL this session (full kiosk → clerk →
+supervisor flow, RBAC 403s, 409/422 on invalid state transitions).
 
 ## Running the frontend locally
 
