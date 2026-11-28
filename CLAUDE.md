@@ -24,8 +24,12 @@ here.
   only for PSR-4 autoloading, not for a framework. A hand-written router and
   PDO are expected, not hidden behind an ORM/framework, so the project
   demonstrates the underlying mechanics for the diploma report.
-- **Database:** MySQL. Locally available via **XAMPP** (already installed —
-  `C:\xampp\mysql\bin\mysql.exe`, MariaDB 10.4.32, service running).
+- **Database:** MySQL. Local dev runs against **MySQL Server 8.0** (the
+  `MySQL80` Windows service, port 3308) via **MySQL Workbench** as the admin
+  GUI - switched 2026-11-28 after XAMPP's bundled MariaDB became unusable
+  (see "XAMPP MariaDB retired" below). A dedicated `urc_app`@`localhost`/
+  `127.0.0.1` user exists, scoped only to the `urc_ticketing` database - never
+  connect as `root` for this project.
 - **Hosting:** Azure, using free Azure for Students credit (university email).
   Plan: Azure App Service (Linux, PHP 8.2+ runtime) + Azure Database for MySQL
   Flexible Server (Burstable tier). Frontend and API are meant to be served
@@ -76,8 +80,10 @@ composer.json             PSR-4 autoload only, no framework/dependencies yet
 .env.example              template; real .env is local-only (gitignored)
 ```
 
-Local dev DB: XAMPP's MariaDB, database `urc_ticketing`, applied via
-`database/schema.sql`. Run the backend locally with
+Local dev DB: MySQL Server 8.0 (`MySQL80` service, `127.0.0.1:3308`),
+database `urc_ticketing`, applied via `database/schema.sql`, connected as
+`urc_app` (not root) - see "XAMPP MariaDB retired" below for why. Run the
+backend locally with
 `composer run serve` (or `php -S 127.0.0.1:8000 -t public public/router.php`),
 then open `http://127.0.0.1:8000/` — this serves the frontend AND the API
 from one origin, matching the planned Azure setup.
@@ -279,6 +285,69 @@ something else, not something this project set up.
       just unit-level reasoning: buttons disable/stay-enabled correctly,
       sale queues and later appears correctly in the `sales` table, kiosk
       recovers and gets a real ticket once reconnected.
+12. **Added a crossfade transition between the four main screens** (kiosk/
+    board/clerk/dash) - `public/js/main.js` (`showScreen`) + `public/css/
+    styles.css`. GPU-cheap (opacity/transform only), ~160ms each way,
+    skips entirely for `prefers-reduced-motion`. Scoped to the top-level
+    tab navigation only - not the login gates or anything else toggled by
+    `render()`'s 2-second poll, to avoid fighting with that. Verified with
+    Playwright: sampled opacity mid-transition to confirm it's actually
+    animating, confirmed rapid double-clicks between tabs don't get stuck,
+    confirmed reduced-motion skips it entirely.
+13. **Reverted the app to the hosting-only-remaining checkpoint** per
+    request - undid the sales-reference-capture, the general `[hidden]`
+    CSS fix, and the per-counter served/no-show counts (all from commits
+    after `974b6f0`). Done as a new forward commit
+    (`git checkout 974b6f0 -- .`), not a history rewrite - nothing was
+    lost; the `pre-payments` git tag and full commit history still have
+    everything if any of it's wanted back. Also: removed the "Transport
+    for London" benchmark attribution text and the brand mark's
+    "Working prototype" subtitle (small copy edits, user request/edit).
+    Created a `development` branch off `master` for ongoing work, keeping
+    `master` as the stable foundation.
+
+### XAMPP MariaDB retired - switched local dev to MySQL Server 8.0
+
+XAMPP's bundled MariaDB (port 3306) became permanently unable to start,
+separately from the earlier `innodb_stats_persistent` hang documented
+above - a **real, reproducible crash** this time (confirmed via Windows
+Event Viewer: `Application Error`, `mysqld.exe`, exception `0x80000003`),
+not a session-level setting. Root cause, found by running
+`mysqld.exe --console` directly to watch it live rather than through the
+XAMPP Control Panel: the data directory had accumulated corrupted
+multi-source-replication state files - `master-*.info`/`relay-log-*.info`
+files whose *names* were literally garbled fragments of previous log
+messages (e.g. `master-2026@002d11@002d27...@0020succeeded@000d.info`).
+MariaDB scans for all `master-*.info` files at startup (multi-source
+replication support) regardless of `skip-slave-start`, tries to parse
+each one as a real connection, and the resulting error cascade is what
+was crashing it - seemingly self-perpetuating, since each failed parse's
+error text appears to have become the *next* garbage filename. Neither
+`skip-slave-start` nor forcing `master-info-repository=FILE`/
+`relay-log-info-repository=FILE` in `C:\xampp\mysql\bin\my.ini` fixed it
+(both still in that file, harmless, but not the actual fix), since
+the crash was in the unconditional file-scan step itself, before either
+setting would matter. The real fix (deleting those 8 garbage files) was
+never completed at the file-permission level - Claude's delete attempts
+were blocked by the auto-mode safety classifier (deleting files outside
+the project directory), and the user hadn't deleted them manually before
+this MySQL Server 8.0 switch was decided instead.
+
+**Decision:** rather than keep fighting XAMPP, moved local dev to the
+**already-installed, already-healthy MySQL Server 8.0** (`MySQL80`
+Windows service, confirmed running fine throughout on port 3308,
+completely unrelated install) managed via **MySQL Workbench**. A
+dedicated `urc_app` user (not root) was created, scoped only to a fresh
+`urc_ticketing` database - `database/schema.sql` applied cleanly, test
+accounts reseeded via `database/seed_users.php`, full app verified
+end-to-end (kiosk → board → clerk → supervisor) against the new
+database. `.env` (gitignored, local-only) now points at
+`127.0.0.1:3308` / `urc_app` instead of `127.0.0.1:3306` / `root`.
+XAMPP itself was never uninstalled or otherwise touched - it's just no
+longer used by this project. If XAMPP's MariaDB is ever wanted again,
+the fix is simply deleting those 8 files from `C:\xampp\mysql\data\`
+(names start with `master-` or `relay-log-`, easy to spot - nothing
+else in that folder looks like that) before starting it.
 
 ## Next steps (where to resume)
 
