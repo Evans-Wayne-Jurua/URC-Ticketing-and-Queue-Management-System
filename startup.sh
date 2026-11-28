@@ -1,10 +1,9 @@
 #!/bin/bash
 # Azure App Service custom startup step (blessed PHP Linux image). Points
-# nginx's docroot at public/ to match the project's web-root boundary -
-# everything outside public/ (composer.json, src/, database/, vendor/)
-# must not be reachable by URL. This runs BEFORE Azure appends its own
-# "; php-fpm;" to whatever Startup Command is configured, so this script
-# must not start php-fpm itself - just edit the config and exit.
+# nginx's docroot at public/ and adds the clean-URL fallback for /api/*
+# that public/api/.htaccess provides under Apache (local dev) but nginx
+# has no equivalent for without an explicit location block. See
+# config/azure-nginx-default.conf for the actual config being installed.
 #
 # On a cold container, this script can run before the base image has
 # finished writing its own default nginx config file - seen directly via
@@ -18,6 +17,6 @@ for i in $(seq 1 30); do
 done
 
 if [ -f "$NGINX_CONF" ]; then
-  sed -i 's#root /home/site/wwwroot;#root /home/site/wwwroot/public;#' "$NGINX_CONF"
+  cp /home/site/wwwroot/config/azure-nginx-default.conf "$NGINX_CONF"
   nginx -s reload 2>&1 || nginx -t 2>&1
 fi
