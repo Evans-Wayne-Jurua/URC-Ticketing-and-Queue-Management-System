@@ -1,0 +1,10 @@
+# Azure App Service (Linux/Apache) serves this whole repo from its real
+# root, not public/ - there's no portal option to change the docroot for
+# the PHP blessed image. This file enforces the same web-root boundary as
+# local dev (only public/ is reachable) by internally rewriting every
+# request into public/ before Apache resolves it to a file, so composer.json,
+# .env, src/, vendor/, database/ etc. are never servable by URL even though
+# they physically live alongside public/ in the deployment.
+RewriteEngine On
+RewriteCond %{REQUEST_URI} !^/public/
+RewriteRule ^(.*)$ public/$1 [L]
