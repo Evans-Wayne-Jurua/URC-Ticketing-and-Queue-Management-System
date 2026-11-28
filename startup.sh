@@ -19,4 +19,5 @@ done
 
 if [ -f "$NGINX_CONF" ]; then
   sed -i 's#root /home/site/wwwroot;#root /home/site/wwwroot/public;#' "$NGINX_CONF"
+  nginx -s reload 2>&1 || nginx -t 2>&1
 fi
