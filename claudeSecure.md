@@ -275,9 +275,18 @@ ticket once back online.
 
 ## What's deliberately NOT done yet (known gaps, not oversights)
 
-- **No admin UI/endpoints** — the `admin` role exists in the schema and
-  every `requireRole` check that includes `supervisor` also includes
-  `admin`, but nothing creates or manages admin accounts yet.
+- **Supervisor-facing account creation exists now** (added 2026-11-28,
+  `src/Controllers/UserController.php`) — `GET`/`POST /api/users`, both
+  `supervisor`/`admin`-gated, every creation audit-logged. Deliberately
+  scoped: the creatable roles are only `clerk`/`supervisor` — **`admin` is
+  never creatable through this endpoint, regardless of who's asking**.
+  That's a privilege-escalation guard, not an oversight: without it, a
+  supervisor account (a tier the UI is meant to let people reach) could
+  mint itself or anyone else an `admin` account (a tier it isn't meant to
+  grant), entirely through the app, with no stronger check anywhere else
+  since every `requireRole` that accepts `supervisor` also accepts
+  `admin`. Admin accounts remain CLI-only (`database/seed_users.php`),
+  which is the actual trust boundary between the two tiers now.
 - **No password complexity/rotation policy** — `password_hash` is used
   correctly, but nothing stops a weak password being set. Low priority at
   this scale (a handful of staff accounts), worth a line in the diploma

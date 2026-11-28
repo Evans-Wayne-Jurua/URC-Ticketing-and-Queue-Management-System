@@ -348,6 +348,15 @@ longer used by this project. If XAMPP's MariaDB is ever wanted again,
 the fix is simply deleting those 8 files from `C:\xampp\mysql\data\`
 (names start with `master-` or `relay-log-`, easy to spot - nothing
 else in that folder looks like that) before starting it.
+14. **Added supervisor-facing staff account creation** - closes a gap the
+    user noticed themselves (the clerk login page has always said "ask a
+    supervisor for an account," but there was no actual feature behind
+    it). `GET`/`POST /api/users`, a "Staff accounts" card on the
+    Supervisor dashboard. Full detail + the privilege-escalation
+    reasoning in `claudeSecure.md` - short version: `admin` is never a
+    creatable role through this endpoint, only `clerk`/`supervisor`, kept
+    CLI-only on purpose. Verified against the real database including
+    the account it created being able to actually log in afterward.
 
 ## Next steps (where to resume)
 
