@@ -185,11 +185,48 @@ early outside that structure.**
   (template, no real values) is tracked. In production, these come from
   **Azure App Service → Configuration → Application settings**, injected
   as real environment variables — never a committed file.
-- Only `public/` is ever the web root (Apache `DocumentRoot` locally and on
-  Azure). `composer.json`, `vendor/`, `src/`, `.env`, and `database/` all
-  sit *outside* `public/`, so none of them are web-reachable even if
-  someone guesses a path — this is the single most important PHP
-  deployment detail, called out explicitly in `CLAUDE.md` too.
+- Only `public/` is ever the web root. `composer.json`, `vendor/`, `src/`,
+  `.env`, and `database/` all sit *outside* `public/`, so none of them are
+  web-reachable even if someone guesses a path — this is the single most
+  important PHP deployment detail, called out explicitly in `CLAUDE.md`
+  too.
+- Locally this is Apache's `DocumentRoot`. **On Azure it's enforced
+  differently** — the PHP-on-Linux App Service image runs nginx, not
+  Apache, which has no `.htaccess` support at all. `startup.sh` (a custom
+  "Startup Command", committed to the repo) installs a full replacement
+  nginx config (`config/azure-nginx-default.conf`) at container boot,
+  with `root` pointed at `public/` and an explicit `location /api/` block
+  replicating the clean-URL fallback `public/api/.htaccess` provides
+  under Apache. Verified directly against the live site:
+  `/composer.json`, `/.env`, and `/src/...` all 404, while `/api/*` and
+  all four frontend screens work normally.
+- **TLS to the database**: Azure Database for MySQL enforces
+  `require_secure_transport=ON`. `Database::connection()` passes
+  `PDO::MYSQL_ATTR_SSL_CA` (pointed at `config/azure-mysql-ca.pem`, the
+  standard Mozilla/cURL CA bundle - not a single vendor-pinned cert) plus
+  `PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => true` whenever a `DB_SSL_CA`
+  env var is set. Local dev has no such var, so this is a no-op there.
+- **HTTPS end-to-end**: the App Service has `HTTPS Only` enabled (plain
+  HTTP requests get a 301 to HTTPS). Azure's front door terminates TLS
+  and forwards plain HTTP internally, so PHP would never see
+  `$_SERVER['HTTPS']` set on its own — the deployed nginx config
+  translates the `X-Forwarded-Proto` header into `fastcgi_param HTTPS`,
+  which is what `Session.php`'s cookie `secure` flag is gated on.
+  Verified live: a real HTTPS login sets a cookie with the Secure flag
+  on, not just HttpOnly/SameSite.
+- **SCM/Kudu basic-auth stays disabled.** Azure disables
+  `basicPublishingCredentialsPolicies` for SCM by default on this
+  subscription. Re-enabling it to make live debugging easier was
+  considered and deliberately **not done** — it would have weakened a
+  platform security control for convenience. `az webapp log tail`
+  (AAD-token authenticated, unaffected by that policy) was used for all
+  live diagnosis instead.
+- Generated production secrets (MySQL admin password, the app DB user's
+  password, the session secret, and the seeded clerk/supervisor
+  production account passwords) live only in `.env.azure`
+  (gitignored, matches the existing `.env.*` pattern) and as Azure App
+  Service Application Settings — never in this file, `CLAUDE.md`, or any
+  commit.
 
 ## Error handling that doesn't leak internals
 

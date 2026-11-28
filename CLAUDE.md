@@ -30,20 +30,24 @@ here.
   (see "XAMPP MariaDB retired" below). A dedicated `urc_app`@`localhost`/
   `127.0.0.1` user exists, scoped only to the `urc_ticketing` database - never
   connect as `root` for this project.
-- **Hosting:** Azure, using free Azure for Students credit (university email).
-  Plan: Azure App Service (Linux, PHP 8.2+ runtime) + Azure Database for MySQL
-  Flexible Server (Burstable tier). Frontend and API are meant to be served
-  from the **same App Service** (one origin) so cookie-based sessions work
-  without CORS complications.
-- **Auth approach (planned, not yet built):** native PHP sessions (not JWT) —
-  `password_hash`/`password_verify`, `session_regenerate_id` on login, RBAC
-  guard function per protected endpoint, CSRF token header on state-changing
-  requests. Kiosk and platform-display screens stay public/no-login — only
-  Clerk and Supervisor need accounts.
-- **Web-root boundary (planned):** once the backend exists, only a `public/`
-  folder should be web-reachable (frontend files + `public/api/index.php`
-  front controller). `composer.json`, `.env`, `src/` must never be served
-  directly — this is the top PHP-on-Azure security gotcha.
+- **Hosting:** Azure, using free Azure for Students credit (university
+  email). **Live** at
+  `https://urc-ticketing-queue-management-system.azurewebsites.net` -
+  Azure App Service (Linux, PHP 8.3) + Azure Database for MySQL Flexible
+  Server (Burstable B1ms), region UAE North (see session item 15 below for
+  why not South Africa North as first planned). Frontend and API are
+  served from the **same App Service** (one origin) so cookie-based
+  sessions work without CORS complications.
+- **Auth approach:** native PHP sessions (not JWT) — `password_hash`/
+  `password_verify`, `session_regenerate_id` on login, RBAC guard function
+  per protected endpoint, CSRF token header on state-changing requests.
+  Kiosk and platform-display screens stay public/no-login — only Clerk
+  and Supervisor need accounts.
+- **Web-root boundary:** only `public/` is web-reachable (frontend files +
+  `public/api/index.php` front controller). `composer.json`, `.env`,
+  `src/` are never servable directly — enforced locally via Apache
+  `.htaccess`, and in production via a custom nginx config (see session
+  item 15) since Azure's PHP-on-Linux image runs nginx, not Apache.
 
 ## Repo structure (current)
 
@@ -86,12 +90,12 @@ database `urc_ticketing`, applied via `database/schema.sql`, connected as
 backend locally with
 `composer run serve` (or `php -S 127.0.0.1:8000 -t public public/router.php`),
 then open `http://127.0.0.1:8000/` — this serves the frontend AND the API
-from one origin, matching the planned Azure setup.
+from one origin, matching the live Azure setup too.
 
-Git: initialized this session, no remote yet. Commits so far (oldest first):
-baseline single-file prototype → layering refactor → counter open/close
-domain fix → layout fix found while testing → CLAUDE.md added → PHP backend
-scaffold (frontend moved into public/, composer/router/schema/health-check).
+Git: pushed to GitHub (`Evans-Wayne-Jurua/URC-Ticketing-and-Queue-Management-System`).
+`master` is the stable foundation; `development` is the active branch for
+ongoing work, merged back to `master` once verified. See the numbered
+list below for what's happened session-by-session.
 
 ## Why move state to the API (not just keep it in-memory)
 
@@ -358,12 +362,82 @@ else in that folder looks like that) before starting it.
     CLI-only on purpose. Verified against the real database including
     the account it created being able to actually log in afterward.
 
+15. **Deployed to Azure** (previously on hold, resumed this session on
+    request). Live at
+    `https://urc-ticketing-queue-management-system.azurewebsites.net`
+    (resource group `rg-urc-ticketing`, region **UAE North** - not South
+    Africa North as originally planned; the Azure for Students subscription
+    turned out to be policy-restricted to a fixed set of 5 regions
+    [uaenorth, switzerlandnorth, indiasouthcentral, polandcentral,
+    austriaeast], confirmed via `az policy assignment list`, and UAE North
+    is the closest of those to East Africa). App Service plan is **Free
+    (F1)** to conserve credit; MySQL Flexible Server is **Burstable
+    B1ms** (no free tier exists for the database, so this is the one
+    always-billing resource - see claudeSecure.md for exact running cost
+    awareness). `HTTPS Only` is enforced at the platform level.
+
+    Two real engineering problems had to be solved, not just "click deploy":
+    - **TLS to the database**: Azure Database for MySQL enforces
+      `require_secure_transport=ON`, so `Database::connection()` now opts
+      into PDO's SSL verification when a `DB_SSL_CA` env var is set
+      (`config/azure-mysql-ca.pem` - the standard Mozilla/cURL CA bundle,
+      not a single vendor-pinned cert). Local dev is unaffected (no such
+      env var there).
+    - **Web-root boundary under nginx, not Apache**: Azure's PHP-on-Linux
+      blessed image runs **nginx + php-fpm**, not Apache - `public/.htaccess`
+      and the API's `.htaccess` rewrite are silently ignored there. The
+      actual docroot is `/home/site/wwwroot` (the repo root) with no portal
+      option to point it at `public/`, and nginx's default template only
+      hands `.php`-suffixed URLs to PHP-FPM, so clean API URLs like
+      `/api/health` 404'd outright. Fixed via `startup.sh` (a custom Azure
+      "Startup Command" target, committed to the repo) that installs
+      `config/azure-nginx-default.conf` - a full replacement nginx config
+      with `root` pointed at `public/` and an added `location /api/` block
+      doing the same try-real-file-then-fall-back-to-index.php job
+      `public/api/.htaccess` does under Apache. Verified afterward:
+      `composer.json`/`.env`/`src/` are all unreachable by URL (404) while
+      `/api/*` and all four frontend screens work normally.
+
+    Getting there took several live misfires worth remembering for next
+    time, not just the end state:
+    - A custom Startup Command **replaces** the platform's default
+      `php-fpm;` invocation rather than running alongside it - Azure
+      silently appends `; php-fpm;` to whatever you set, so a command that
+      already ends in `php-fpm;` itself produces a literal `;;` **syntax
+      error that kills the whole startup script** (confirmed live via
+      `az webapp log tail` - this is what actually caused the first two
+      outages, not the specific commands being "wrong").
+    - `git archive` was silently converting this repo's shell scripts from
+      LF to CRLF on export (driven by this Windows machine's
+      `core.autocrlf`), which is a bash syntax error at runtime
+      (`unexpected token $'do\r'`) - invisible if you only check the git
+      blob itself, only visible by unzipping the actual deploy artifact.
+      Fixed permanently via `.gitattributes` (`*.sh text eol=lf`,
+      `*.conf text eol=lf`), not a one-off re-save.
+    - The container's own nginx default config can genuinely not exist yet
+      the moment a custom Startup Command runs on a cold start (confirmed
+      via log timestamps, not assumed) - `startup.sh` polls for it for up
+      to 15s before editing it.
+    - SCM/Kudu basic-auth credentials are disabled by default on this
+      subscription's App Services now (`basicPublishingCredentialsPolicies`)
+      - re-enabling it to ease debugging was deliberately **not done**
+      (flagged as weakening a platform security control); `az webapp log
+      tail` (AAD-authenticated, not gated by that policy) was used instead
+      for all live diagnosis.
+
+    Still genuinely open: GitHub Actions CI/CD for auto-deploy on push is
+    **not set up** - every deploy so far has been a manual
+    `az webapp deploy` from this machine. `.env.azure` (gitignored, local
+    only) holds the generated MySQL admin/app passwords and seeded
+    clerk/supervisor production account passwords - not written to
+    CLAUDE.md or claudeSecure.md on purpose.
+
 ## Next steps (where to resume)
 
-Azure resources (App Service + Database for MySQL) + GitHub Actions CI/CD -
-**on hold, explicitly deferred by the user for now.** Don't start this
-without being asked again. Everything else from the original roadmap
-(auth, RBAC, audit logging, rate limiting, sales, offline mode) is done.
+GitHub Actions CI/CD for auto-deploy on push is the one piece of the
+original roadmap not yet done. Everything else - auth, RBAC, audit
+logging, rate limiting, sales, offline mode, and now Azure hosting itself
+- is done and verified against the live deployment.
 
 ### Current API surface (`src/routes.php`)
 
