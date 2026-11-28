@@ -159,4 +159,13 @@ function renderDashboard() {
   }).join("");
 
   drawChart(d.inQueue);
+
+  var userListEl = $("userList");
+  if (userListEl) {
+    var users = cache.users || [];
+    userListEl.innerHTML = users.length ? users.map(function (u) {
+      return "<li><span class='qsvc'>" + u.email + "</span>"
+        + "<span class='pill pill-idle'>" + u.role + "</span></li>";
+    }).join("") : "<li><div class='empty-state'>No staff accounts yet.</div></li>";
+  }
 }

@@ -4,7 +4,7 @@
 import { $, fmtMin } from "./ui/dom.js";
 import { api } from "./state/api.js";
 import {
-  cache, refreshAll, refreshPublic, refreshQueue, refreshDashboard,
+  cache, refreshAll, refreshPublic, refreshQueue, refreshDashboard, refreshUsers,
   login, logout, isCounterOpen, markLocallyCompleted, clearLocallyCompleted,
 } from "./state/store.js";
 import { isOffline, markOnline, markOffline, isNetworkError } from "./state/offline.js";
@@ -137,7 +137,7 @@ function wireLoginForm(form) {
     errEl.textContent = "";
     login(email, password).then(function () {
       form.reset();
-      return Promise.all([refreshQueue(), refreshDashboard()]);
+      return Promise.all([refreshQueue(), refreshDashboard(), refreshUsers()]);
     }).then(function () {
       render();
     }).catch(function (err) {
@@ -153,6 +153,28 @@ document.querySelectorAll("[data-logout]").forEach(function (btn) {
     logout().then(function () { render(); });
   });
 });
+
+/* ---------------- supervisor: create staff accounts ---------------- */
+var createUserForm = $("createUserForm");
+if (createUserForm) {
+  createUserForm.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var email = createUserForm.email.value.trim();
+    var password = createUserForm.password.value;
+    var role = createUserForm.role.value;
+    var errEl = createUserForm.querySelector("[data-error]");
+    errEl.textContent = "";
+
+    api.createUser(email, password, role).then(function () {
+      createUserForm.reset();
+      return refreshUsers();
+    }).then(function () {
+      render();
+    }).catch(function (err) {
+      errEl.textContent = err.message || "Could not create account";
+    });
+  });
+}
 
 /* ---------------- 3 clerk ---------------- */
 $("ctrPick").addEventListener("change", function (e) {
@@ -281,7 +303,7 @@ function tick() {
       markOnline();
       if (pendingSales.list().length > 0) return flushPendingSales();
     })
-    .then(function () { return Promise.all([refreshQueue(), refreshDashboard()]); })
+    .then(function () { return Promise.all([refreshQueue(), refreshDashboard(), refreshUsers()]); })
     .then(render)
     .catch(function (e) {
       if (isNetworkError(e)) { markOffline(); render(); }

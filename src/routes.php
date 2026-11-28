@@ -9,6 +9,7 @@ use App\Controllers\HealthController;
 use App\Controllers\QueueController;
 use App\Controllers\ServiceController;
 use App\Controllers\TokenController;
+use App\Controllers\UserController;
 use App\Http\Router;
 
 /** @var Router $router */
@@ -34,3 +35,7 @@ $router->post('/tokens', [$tokens, 'take']);
 $router->post('/counters/{number}/call-next', [$tokens, 'callNext']);
 $router->post('/counters/{number}/complete', [$tokens, 'complete']);
 $router->post('/counters/{number}/no-show', [$tokens, 'noShow']);
+
+$users = new UserController();
+$router->get('/users', [$users, 'index']);
+$router->post('/users', [$users, 'create']);

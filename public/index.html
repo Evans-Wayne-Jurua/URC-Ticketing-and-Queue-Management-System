@@ -279,6 +279,30 @@
         <div class="card-h"><h3>Counter status</h3></div>
         <ul class="qlist" id="ctrStatus"></ul>
       </div>
+      <div class="card">
+        <div class="card-h"><h3>Staff accounts</h3></div>
+        <ul class="qlist" id="userList"></ul>
+        <div class="card-b" style="padding-top:12px;border-top:1px solid var(--line)">
+          <form id="createUserForm">
+            <label class="field"><span>Email</span>
+              <input type="email" name="email" required autocomplete="off">
+            </label>
+            <div class="row2">
+              <label class="field"><span>Password</span>
+                <input type="password" name="password" required minlength="8" autocomplete="new-password">
+              </label>
+              <label class="field"><span>Role</span>
+                <select name="role">
+                  <option value="clerk">Clerk</option>
+                  <option value="supervisor">Supervisor</option>
+                </select>
+              </label>
+            </div>
+            <p class="meta" data-error style="color:var(--waiting);min-height:18px"></p>
+            <button type="submit" class="btn btn-pri" style="width:100%">Create account</button>
+          </form>
+        </div>
+      </div>
       <div class="card"><div class="card-b">
         <p class="cap" style="margin-bottom:8px">Measured, not assumed</p>
         <p style="font-size:13.5px;color:var(--muted)">λ and μ are re-estimated from this station’s own stamps. Load another operator’s data and the same screens retrain on it — nothing here is hard-coded to URC.</p>

@@ -12,6 +12,7 @@ export const cache = {
   board: null,
   queue: null, // clerk/supervisor only
   dashboard: null, // supervisor only
+  users: null, // supervisor/admin only
 };
 
 export function isLoggedIn() {
@@ -90,10 +91,23 @@ export async function refreshDashboard() {
   }
 }
 
+export async function refreshUsers() {
+  if (!hasRole(['supervisor', 'admin'])) {
+    cache.users = null;
+    return;
+  }
+  try {
+    const data = await api.listUsers();
+    cache.users = data.users;
+  } catch (e) {
+    if (!isNetworkError(e)) cache.users = null;
+  }
+}
+
 export async function refreshAll() {
   await refreshAuth();
   await refreshPublic();
-  await Promise.all([refreshQueue(), refreshDashboard()]);
+  await Promise.all([refreshQueue(), refreshDashboard(), refreshUsers()]);
 }
 
 export async function login(email, password) {
@@ -107,4 +121,5 @@ export async function logout() {
   cache.auth = null;
   cache.queue = null;
   cache.dashboard = null;
+  cache.users = null;
 }

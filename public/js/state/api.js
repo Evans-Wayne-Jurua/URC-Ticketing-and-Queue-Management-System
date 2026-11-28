@@ -47,4 +47,7 @@ export const api = {
   login: (email, password) => request('POST', '/auth/login', { email, password }),
   logout: () => request('POST', '/auth/logout'),
   me: () => request('GET', '/auth/me'),
+
+  listUsers: () => request('GET', '/users'),
+  createUser: (email, password, role) => request('POST', '/users', { email, password, role }),
 };
